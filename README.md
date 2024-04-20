@@ -2992,7 +2992,7 @@ Get-Help Invoke-BloodHound
 
 Invoke Sharphound -- data in zip files
 ```
-Invoke-BloodHound -CollectionMethod All -OutputDirectory C:\Users\stephanie\Desktop\ -OutputPrefix "corp audit"
+Invoke-BloodHound -CollectionMethod All -OutputPrefix "oscp_audit"
 ```
 
 ### BloodHound

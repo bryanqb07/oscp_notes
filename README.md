@@ -3529,6 +3529,6 @@ cp target_file.json Y:
 enabling RDP
 ```
 net localgroup "Remote Desktop Users"
-net start termservice
 netsh advfirewall firewall add rule name="Allow RDP" protocol=TCP dir=in localport=3389 action=allow
+net start termservice
 ```

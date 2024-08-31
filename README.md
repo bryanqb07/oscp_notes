@@ -3538,8 +3538,6 @@ recursively download SMB folder
 mask ""
 recurse ON
 prompt OFF
-cd 'path\to\remote\dir'
-lcd '~/path/to/download/to/'
 mget *
 ```
 

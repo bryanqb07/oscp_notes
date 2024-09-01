@@ -885,7 +885,7 @@ use wsgidav to setup local http server, can confirm it's running by going to 127
 ```
 mkdir /home/kali/webdav
 touch /home/kali/webdav/test.txt
-/home/kali/.local/bin/wsgidav --host=0.0.0.0 --port=80 --auth=anonymous --root /home/kali/webdav/
+/home/kali/.local/bin/wsgidav --host=0.0.0.0 --port=80 --auth=anonymous --root /home/kali/offsec/oscp/webdav
 ```
 
 example template https://learn.microsoft.com/en-us/windows/win32/shell/library-schema-entry

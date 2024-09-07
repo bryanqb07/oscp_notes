@@ -3577,7 +3577,7 @@ lsadump::cache
 
 get password policy for AD
 ```
-netexec smb $ipa --pass-pol
+netexec smb $ipa --pass-pol -u '' -p ''
 ```
 
 

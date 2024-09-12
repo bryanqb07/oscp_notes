@@ -3580,4 +3580,9 @@ get password policy for AD
 netexec smb $ipa --pass-pol -u '' -p ''
 ```
 
+wget recursively download entire FTP share
+```
+wget -r -np -nH --cut-dirs=1 --reject "index.html*" ftp://anonymous:password@$ipa
+```
+
 
